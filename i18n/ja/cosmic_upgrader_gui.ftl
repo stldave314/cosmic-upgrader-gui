@@ -240,3 +240,39 @@ releases-interval = 自動的に確認する
 releases-last-checked = 最終確認 { $when }
 releases-never-checked = 未確認
 releases-next-check = 次回 { $when }
+
+## Dependencies, release channel and directories
+
+channel-pre-release = ベータ版とリリース候補も含める
+channel-stable = 安定版のみ
+dep-authentication-dismissed = 認証は取り消されました。
+dep-curl = プロジェクトのホストからリリース情報を取得し、更新をダウンロードします。
+dependencies-all-present = このアプリケーションに必要なものはすべてインストールされています。
+dependencies-description = このアプリケーションは他のプログラムを動かすことで機能します。欠けているとその機能が黙って何もしなくなるため、用途とともにここに一覧します。
+dependencies-heading = 必要なツール
+dependencies-install = インストール
+dependencies-installed = インストール済み
+dependencies-install-failed = { $name } をインストールできませんでした: { $message }
+dependencies-installing = インストールしています…
+dependencies-missing = 未インストール
+dependencies-no-manager = 対応するパッケージマネージャーが見つからないため、ここからはインストールできません。
+dependencies-optional = 任意
+dependencies-recheck = 再確認
+dependencies-required = 必須
+dep-gh = GitHub の資格情報を利用し、リリース確認の上限を毎時 60 件から 5000 件に引き上げます。
+dep-notify-send = 誰も見ていない予約実行の結果を通知します。
+dep-pkexec = システム更新やパッケージのインストールのために、デスクトップのダイアログで管理者権限を求めます。
+dep-systemctl = 更新のスケジュールを systemd のユーザータイマーとして保持し、ウィンドウを閉じていても実行します。
+dep-topgrade = 更新そのものを実行します。これがないとこのアプリケーションには動かす対象がありません。
+dep-xdg-open = リリースページやリンクをブラウザーで開きます。
+nav-dependencies = 依存関係
+releases-channel = 提示するリリース
+releases-directories = ダウンロードしたアプリケーションの場所
+releases-directories-description = AppImage やその他のダウンロード済みプログラムを探します。相対パスはホームディレクトリーからです。
+releases-directory-add = ディレクトリーを追加
+releases-directory-placeholder = Applications
+releases-self = このアプリケーション
+dependencies-missing-required = { $count ->
+   *[other] 必須のツールが { $count } 個不足しています。
+}
+releases-channel-description = リリース候補やベータ版を更新として扱うかどうか。

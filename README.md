@@ -97,6 +97,9 @@ than by hunting down a long configuration page.
 - **Start with the session**, and an optional icon in the panel's status area.
 - **Release tracking** for software installed outside a package manager, against
   GitHub, GitLab, Gitea and Forgejo — including self-hosted instances.
+- **Updates itself** the same way, whatever it was installed from.
+- **A dependency check** saying what each tool it drives is for, whether it is
+  required, and whether you have it.
 
 ## Release tracking
 
@@ -120,6 +123,15 @@ heard of. Three API shapes cover all of it:
 A host recognised by name is asked once. One that is not is tried in each shape
 until one answers, so a self-hosted instance works without being listed
 anywhere.
+
+### It watches itself
+
+This application is listed first and always, whatever it was installed from.
+The entry is synthesized from the repository and version compiled into the
+binary rather than discovered from a package database — so a build from source,
+where there is no file to find and nothing installed to read, still gets update
+notices. It has no "stop watching" button, because that is not a thing to turn
+off.
 
 ### Where the projects come from
 
@@ -173,7 +185,28 @@ place — written alongside and renamed over, carrying the original's permission
 so an interrupted replacement cannot leave a half-written file where a working
 program was.
 
-![Watched projects across GitHub, Gitea and GitLab](docs/releases.png)
+![Watched projects across GitHub, Gitea and GitLab, with this application first](docs/releases.png)
+
+Discovery proposes what it found and you choose — a `Homepage:` field is a hint
+about where a project lives, not a promise that its releases are what got
+installed:
+
+![Choosing which discovered projects to watch](docs/discovery.png)
+
+### Stable only, or betas too
+
+**Releases to offer** decides whether release candidates and betas count. Both
+signals are read: the forge's own pre-release flag, *and* the tag — plenty of
+projects tag `v2.0.0-rc1` and never tick the box on the release page, and
+somebody who asked for stable versions should not be shown one anyway.
+
+### Where downloaded applications live
+
+Where people keep downloaded programs is a matter of habit, so the search
+directories are a setting rather than a fixed list. `~/Applications`,
+`~/Downloads`, `~/.local/bin`, `~/bin` and `~/AppImages` are searched by
+default; relative paths are taken from your home directory and absolute ones
+used as given, so somewhere outside home works too.
 
 ### How often
 
@@ -195,6 +228,39 @@ your credentials and gets 5000 requests an hour where an unauthenticated client
 gets 60 — a watch list of any size exhausts that immediately. Both are detected
 rather than assumed; if neither is present the page says so once instead of
 every row reporting the same failure.
+
+## Dependencies
+
+Almost everything here is done by driving another program. That is deliberate,
+but it has a cost: a missing tool turns into a feature that quietly does
+nothing, and you have no way to know which tool or why. So the list is explicit,
+checked at first run, and available afterwards.
+
+![The dependency check](docs/dependencies.png)
+
+Each entry says what it is for, whether it is **required** or **optional**, and
+where it was found — "which `curl` is it actually using" is the question asked
+when a tool misbehaves. Required means the application cannot do its job;
+optional means one feature is unavailable and everything else is fine.
+
+| Tool | | Without it |
+| --- | --- | --- |
+| `topgrade` | Required | There is nothing to drive |
+| `curl` | Required | No forge can be reached |
+| `pkexec` | Optional | No administrator rights for system upgrades |
+| `gh` | Optional | GitHub checks drop from 5000 to 60 an hour |
+| `notify-send` | Optional | Scheduled runs report nothing |
+| `systemctl` | Optional | No schedule that survives the window closing |
+| `xdg-open` | Optional | Release pages do not open |
+
+Anything missing can be installed from here, through `pkexec` and whichever of
+`apt`, `dnf` or `pacman` this system uses — detected from which tool is present
+rather than from `/etc/os-release`, since a derivative reports its own name but
+installs with its parent's tool. Nothing is installed without being asked for,
+and the check is re-run afterwards rather than assuming it worked.
+
+If something required is missing, the first run leads with this page instead of
+an application that half works.
 
 ## Run history
 

@@ -241,3 +241,40 @@ releases-interval = Automatisch controleren
 releases-last-checked = Laatst gecontroleerd { $when }
 releases-never-checked = Nog niet gecontroleerd
 releases-next-check = volgende { $when }
+
+## Dependencies, release channel and directories
+
+channel-pre-release = Bèta's en release-kandidaten meenemen
+channel-stable = Alleen stabiele
+dep-authentication-dismissed = De aanmelding is geannuleerd.
+dep-curl = Haalt uitgave-informatie op bij projecthosts en downloadt updates.
+dependencies-all-present = Alles wat deze toepassing nodig heeft, is geïnstalleerd.
+dependencies-description = Deze toepassing werkt door andere programma's aan te sturen. Een ontbrekend programma wordt een functie die stilletjes niets doet, daarom staan ze hier met hun doel.
+dependencies-heading = Benodigde hulpmiddelen
+dependencies-install = Installeren
+dependencies-installed = Geïnstalleerd
+dependencies-install-failed = { $name } kon niet worden geïnstalleerd: { $message }
+dependencies-installing = Bezig met installeren…
+dependencies-missing = Niet geïnstalleerd
+dependencies-no-manager = Er is geen ondersteunde pakketbeheerder gevonden, dus hiervandaan kan niets worden geïnstalleerd.
+dependencies-optional = Optioneel
+dependencies-recheck = Opnieuw controleren
+dependencies-required = Vereist
+dep-gh = Gebruikt uw GitHub-gegevens, waardoor de limiet van 60 naar 5000 verzoeken per uur gaat.
+dep-notify-send = Meldt het resultaat van een geplande uitvoering waar niemand naar keek.
+dep-pkexec = Vraagt beheerdersrechten via het venster van het bureaublad, voor systeemupgrades en pakketinstallaties.
+dep-systemctl = Houdt de planning als systemd-gebruikerstimer, zodat die draait als dit venster gesloten is.
+dep-topgrade = Voert de opwaarderingen zelf uit. Zonder dit heeft deze toepassing niets aan te sturen.
+dep-xdg-open = Opent uitgavepagina's en koppelingen in uw browser.
+nav-dependencies = Afhankelijkheden
+releases-channel = Uitgaven om aan te bieden
+releases-directories = Mappen met gedownloade toepassingen
+releases-directories-description = Hierin wordt gezocht naar AppImages en andere gedownloade programma's. Relatieve paden gaan uit van uw persoonlijke map.
+releases-directory-add = Map toevoegen
+releases-directory-placeholder = Applications
+releases-self = Deze toepassing
+dependencies-missing-required = { $count ->
+    [one] Er ontbreekt 1 vereist hulpmiddel.
+   *[other] Er ontbreken { $count } vereiste hulpmiddelen.
+}
+releases-channel-description = Of release-kandidaten en bèta's als updates tellen.

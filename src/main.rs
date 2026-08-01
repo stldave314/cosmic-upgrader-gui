@@ -11,6 +11,7 @@ mod autostart;
 mod config;
 mod constants;
 mod debug;
+mod dependencies;
 mod history;
 mod i18n;
 mod notify;

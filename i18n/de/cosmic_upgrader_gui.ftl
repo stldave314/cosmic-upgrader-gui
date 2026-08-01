@@ -241,3 +241,40 @@ releases-interval = Automatisch prüfen
 releases-last-checked = Zuletzt geprüft { $when }
 releases-never-checked = Noch nicht geprüft
 releases-next-check = nächste { $when }
+
+## Dependencies, release channel and directories
+
+channel-pre-release = Betas und Veröffentlichungskandidaten einbeziehen
+channel-stable = Nur stabile
+dep-authentication-dismissed = Die Authentifizierung wurde abgebrochen.
+dep-curl = Holt Veröffentlichungsinformationen von Projekt-Hosts und lädt Aktualisierungen herunter.
+dependencies-all-present = Alles, was diese Anwendung benötigt, ist installiert.
+dependencies-description = Diese Anwendung arbeitet, indem sie andere Programme steuert. Ein fehlendes Programm wird zu einer Funktion, die stillschweigend nichts tut, daher sind sie hier mit ihrem Zweck aufgeführt.
+dependencies-heading = Benötigte Werkzeuge
+dependencies-install = Installieren
+dependencies-installed = Installiert
+dependencies-install-failed = { $name } konnte nicht installiert werden: { $message }
+dependencies-installing = Wird installiert …
+dependencies-missing = Nicht installiert
+dependencies-no-manager = Es wurde keine unterstützte Paketverwaltung gefunden, daher kann von hier aus nichts installiert werden.
+dependencies-optional = Optional
+dependencies-recheck = Erneut prüfen
+dependencies-required = Erforderlich
+dep-gh = Übermittelt Ihre GitHub-Anmeldedaten und erhöht das Limit für Veröffentlichungsprüfungen von 60 auf 5000 Anfragen pro Stunde.
+dep-notify-send = Meldet das Ergebnis einer geplanten Ausführung, die niemand beobachtet hat.
+dep-pkexec = Fragt über den Dialog der Arbeitsumgebung nach Administratorrechten, für Systemaktualisierungen und Paketinstallationen.
+dep-systemctl = Führt den Aktualisierungszeitplan als systemd-Benutzertimer, damit er auch bei geschlossenem Fenster läuft.
+dep-topgrade = Führt die Aktualisierungen selbst durch. Ohne dieses Programm hat diese Anwendung nichts zu steuern.
+dep-xdg-open = Öffnet Veröffentlichungsseiten und Links in Ihrem Browser.
+nav-dependencies = Abhängigkeiten
+releases-channel = Anzubietende Veröffentlichungen
+releases-directories = Verzeichnisse für heruntergeladene Anwendungen
+releases-directories-description = Wird nach AppImages und anderen heruntergeladenen Programmen durchsucht. Relative Pfade beziehen sich auf Ihr persönliches Verzeichnis.
+releases-directory-add = Verzeichnis hinzufügen
+releases-directory-placeholder = Applications
+releases-self = Diese Anwendung
+dependencies-missing-required = { $count ->
+    [one] 1 benötigtes Werkzeug fehlt.
+   *[other] { $count } benötigte Werkzeuge fehlen.
+}
+releases-channel-description = Ob Veröffentlichungskandidaten und Betas als Aktualisierungen gelten.

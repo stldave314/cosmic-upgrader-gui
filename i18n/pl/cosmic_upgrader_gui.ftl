@@ -243,3 +243,42 @@ releases-interval = Sprawdzaj automatycznie
 releases-last-checked = Ostatnio sprawdzono { $when }
 releases-never-checked = Jeszcze nie sprawdzono
 releases-next-check = następne { $when }
+
+## Dependencies, release channel and directories
+
+channel-pre-release = Uwzględniaj wersje beta i kandydujące
+channel-stable = Tylko stabilne
+dep-authentication-dismissed = Uwierzytelnianie zostało anulowane.
+dep-curl = Pobiera informacje o wydaniach z serwerów projektów i pobiera aktualizacje.
+dependencies-all-present = Wszystko, czego ta aplikacja potrzebuje, jest zainstalowane.
+dependencies-description = Ta aplikacja działa, sterując innymi programami. Brakujący program staje się funkcją, która po cichu nic nie robi, dlatego są tu wypisane wraz z ich przeznaczeniem.
+dependencies-heading = Potrzebne narzędzia
+dependencies-install = Zainstaluj
+dependencies-installed = Zainstalowano
+dependencies-install-failed = Nie udało się zainstalować { $name }: { $message }
+dependencies-installing = Instalowanie…
+dependencies-missing = Nie zainstalowano
+dependencies-no-manager = Nie znaleziono obsługiwanego menedżera pakietów, więc nie można stąd nic zainstalować.
+dependencies-optional = Opcjonalne
+dependencies-recheck = Sprawdź ponownie
+dependencies-required = Wymagane
+dep-gh = Przekazuje Twoje dane logowania do GitHuba, podnosząc limit sprawdzeń z 60 do 5000 żądań na godzinę.
+dep-notify-send = Zgłasza wynik zaplanowanego uruchomienia, którego nikt nie obserwował.
+dep-pkexec = Prosi o uprawnienia administratora przez okno pulpitu, na potrzeby aktualizacji systemu i instalacji pakietów.
+dep-systemctl = Utrzymuje harmonogram jako licznik czasu użytkownika systemd, aby działał przy zamkniętym oknie.
+dep-topgrade = Wykonuje same aktualizacje. Bez niego ta aplikacja nie ma czym sterować.
+dep-xdg-open = Otwiera strony wydań i odnośniki w przeglądarce.
+nav-dependencies = Zależności
+releases-channel = Wydania do proponowania
+releases-directories = Katalogi pobranych aplikacji
+releases-directories-description = Przeszukiwane w poszukiwaniu AppImages i innych pobranych programów. Ścieżki względne liczone są od katalogu domowego.
+releases-directory-add = Dodaj katalog
+releases-directory-placeholder = Applications
+releases-self = Ta aplikacja
+dependencies-missing-required = { $count ->
+    [one] Brakuje 1 wymaganego narzędzia.
+    [few] Brakuje { $count } wymaganych narzędzi.
+    [many] Brakuje { $count } wymaganych narzędzi.
+   *[other] Brakuje { $count } wymaganego narzędzia.
+}
+releases-channel-description = Czy wersje kandydujące i beta liczą się jako aktualizacje.

@@ -241,3 +241,40 @@ releases-interval = Verifica automatica
 releases-last-checked = Ultima verifica { $when }
 releases-never-checked = Non ancora verificato
 releases-next-check = prossima { $when }
+
+## Dependencies, release channel and directories
+
+channel-pre-release = Includi beta e candidate al rilascio
+channel-stable = Solo stabili
+dep-authentication-dismissed = L'autenticazione è stata annullata.
+dep-curl = Recupera le informazioni sui rilasci dagli host dei progetti e scarica gli aggiornamenti.
+dependencies-all-present = Tutto ciò che serve a questa applicazione è installato.
+dependencies-description = Questa applicazione funziona pilotando altri programmi. Uno mancante diventa una funzione che non fa nulla in silenzio, perciò sono elencati qui con il loro scopo.
+dependencies-heading = Strumenti necessari
+dependencies-install = Installa
+dependencies-installed = Installato
+dependencies-install-failed = Impossibile installare { $name }: { $message }
+dependencies-installing = Installazione…
+dependencies-missing = Non installato
+dependencies-no-manager = Non è stato trovato alcun gestore di pacchetti supportato, quindi non si può installare da qui.
+dependencies-optional = Facoltativo
+dependencies-recheck = Verifica di nuovo
+dependencies-required = Necessario
+dep-gh = Fornisce le tue credenziali GitHub, portando il limite delle verifiche da 60 a 5000 richieste all'ora.
+dep-notify-send = Riferisce l'esito di un'esecuzione pianificata che nessuno stava guardando.
+dep-pkexec = Chiede i permessi di amministratore tramite la finestra della scrivania, per aggiornamenti di sistema e installazioni.
+dep-systemctl = Mantiene la pianificazione come timer utente di systemd, così viene eseguita anche a finestra chiusa.
+dep-topgrade = Esegue gli aggiornamenti veri e propri. Senza di esso questa applicazione non ha nulla da pilotare.
+dep-xdg-open = Apre le pagine dei rilasci e i collegamenti nel browser.
+nav-dependencies = Dipendenze
+releases-channel = Rilasci da proporre
+releases-directories = Cartelle delle applicazioni scaricate
+releases-directories-description = Vi si cercano AppImage e altri programmi scaricati. I percorsi relativi partono dalla tua cartella personale.
+releases-directory-add = Aggiungi cartella
+releases-directory-placeholder = Applications
+releases-self = Questa applicazione
+dependencies-missing-required = { $count ->
+    [one] Manca 1 strumento necessario.
+   *[other] Mancano { $count } strumenti necessari.
+}
+releases-channel-description = Se le candidate al rilascio e le beta contano come aggiornamenti.

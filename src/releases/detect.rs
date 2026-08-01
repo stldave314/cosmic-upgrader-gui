@@ -22,7 +22,6 @@
 use std::path::{Path, PathBuf};
 
 use super::forge::Repo;
-use crate::constants::APPIMAGE_SEARCH_DIRS;
 use crate::debug::RELEASES;
 use crate::debug_log;
 
@@ -263,16 +262,25 @@ pub fn parse_appimage_filename(file_name: &str) -> (String, String) {
     }
 }
 
-/// Look through the usual places for AppImages and read what each one says
+/// Look through the given directories for AppImages and read what each one says
 /// about itself.
-pub fn find_appimages() -> Vec<Candidate> {
-    let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else {
-        return Vec::new();
-    };
+///
+/// The directories are a parameter rather than a fixed list because where
+/// people keep downloaded applications is a matter of habit — `~/Applications`,
+/// `~/Downloads`, `/opt`, an external drive — and guessing wrongly means
+/// silently finding nothing.
+pub fn find_appimages(directories: &[String]) -> Vec<Candidate> {
+    let home = std::env::var_os("HOME").map(PathBuf::from);
 
     let mut candidates = Vec::new();
-    for directory in APPIMAGE_SEARCH_DIRS {
-        let directory = home.join(directory);
+    for entry in directories {
+        // An absolute path is used as given; a relative one is taken from home,
+        // which is what the defaults are written as.
+        let directory = match (Path::new(entry).is_absolute(), &home) {
+            (true, _) => PathBuf::from(entry),
+            (false, Some(home)) => home.join(entry),
+            (false, None) => continue,
+        };
         let Ok(entries) = std::fs::read_dir(&directory) else {
             continue;
         };

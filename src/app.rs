@@ -22,7 +22,10 @@ use crate::debug::UI;
 use crate::debug_log;
 use crate::fl;
 use crate::history::{self, Origin, Outcome as RunOutcome, Recorder};
-use crate::releases::{self, detect::Candidate, CheckInterval, Status as ReleaseStatus, Watch};
+use crate::dependencies::{self, Report, Requirement};
+use crate::releases::{
+    self, detect::Candidate, Channel, CheckInterval, Status as ReleaseStatus, Watch,
+};
 use crate::schedule::{self, Backend, Frequency};
 use crate::tray;
 use crate::topgrade::{
@@ -74,6 +77,7 @@ pub enum Page {
     Run,
     Releases,
     History,
+    Dependencies,
     Schedule,
     Configuration,
 }
@@ -197,6 +201,13 @@ pub enum Message {
     ConfigShowUnavailable(bool),
     ConfigNotify(bool),
     ConfigCheckInterval(usize),
+    ConfigChannel(usize),
+    AddDirectory,
+    DraftDirectory(String),
+    RemoveDirectory(String),
+    RecheckDependencies,
+    InstallDependency(String),
+    DependencyInstalled(Box<Result<String, (String, String)>>),
     ConfigUpdated(Config),
 }
 
@@ -276,6 +287,12 @@ struct Ready {
     checking: Option<(usize, usize)>,
     /// The project currently being downloaded and installed.
     installing: Option<String>,
+    /// What was found when the tools this application drives were last checked.
+    deps: Vec<Report>,
+    /// The dependency currently being installed.
+    installing_dep: Option<String>,
+    /// Half-typed directory to add to the search list.
+    directory_draft: String,
 }
 
 /// A run in progress or just finished.
@@ -327,6 +344,7 @@ pub struct App {
     privilege_labels: Vec<String>,
     frequency_labels: Vec<String>,
     interval_labels: Vec<String>,
+    channel_labels: Vec<String>,
     hour_labels: Vec<String>,
     minute_labels: Vec<String>,
 }
@@ -403,6 +421,11 @@ impl App {
                 fl!("nav-history"),
                 "document-open-recent-symbolic",
                 Page::History,
+            ),
+            (
+                fl!("nav-dependencies"),
+                "application-x-executable-symbolic",
+                Page::Dependencies,
             ),
             (fl!("nav-schedule"), "alarm-symbolic", Page::Schedule),
             (
@@ -628,6 +651,7 @@ impl Application for App {
                 fl!("interval-daily"),
                 fl!("interval-weekly"),
             ],
+            channel_labels: vec![fl!("channel-stable"), fl!("channel-pre-release")],
             hour_labels: (0..24).map(|hour| format!("{hour:02}")).collect(),
             minute_labels: (0..60).step_by(5).map(|m| format!("{m:02}")).collect(),
         };
@@ -764,7 +788,23 @@ impl Application for App {
                 widget::dialog()
                     .icon(widget::icon::from_name(crate::constants::APP_ICON).size(64))
                     .title(fl!("first-run-title"))
-                    .body(fl!("first-run-body"))
+                    .body(match self.ready() {
+                        Some(ready) if dependencies::has_missing_required(&ready.deps) => {
+                            format!(
+                                "{}\n\n{}",
+                                fl!(
+                                    "dependencies-missing-required",
+                                    count = ready
+                                        .deps
+                                        .iter()
+                                        .filter(|report| report.is_problem())
+                                        .count()
+                                ),
+                                fl!("first-run-body")
+                            )
+                        }
+                        _ => fl!("first-run-body"),
+                    })
                     .control(
                         widget::settings::section()
                             .add(
@@ -876,6 +916,9 @@ impl Application for App {
                             statuses: HashMap::new(),
                             checking: None,
                             installing: None,
+                            deps: dependencies::check(),
+                            installing_dep: None,
+                            directory_draft: String::new(),
                         }));
                         self.rebuild_nav();
 
@@ -894,8 +937,7 @@ impl Application for App {
                         // Only when it is actually due: a watch list of a few
                         // hundred projects polled on every launch would be
                         // impolite to the forges and rate-limited by some.
-                        let check = if !self.config.watches.is_empty()
-                            && self
+                        let check = if self
                                 .config
                                 .release_check_interval
                                 .is_due(self.config.last_release_check, unix_now())
@@ -1381,8 +1423,9 @@ impl Application for App {
                 if let Some(ready) = self.ready_mut() {
                     ready.discovering = true;
                 }
+                let directories = self.config.appimage_dirs.clone();
                 cosmic::task::future(async move {
-                    Message::ProjectsDiscovered(releases::discover().await)
+                    Message::ProjectsDiscovered(releases::discover(&directories).await)
                 })
             }
 
@@ -1465,7 +1508,20 @@ impl Application for App {
             }
 
             Message::CheckReleases => {
-                let watches = self.config.watches.clone();
+                // This application's own project is always checked, however it
+                // was installed — there is nothing on disk to discover it from
+                // when it was built from source.
+                let mut watches = self.config.watches.clone();
+                if let Some(own) = releases::self_watch() {
+                    let key = format!("{}/{}", own.host, own.path);
+                    if !watches
+                        .iter()
+                        .any(|watch| format!("{}/{}", watch.host, watch.path) == key)
+                    {
+                        watches.insert(0, own);
+                    }
+                }
+                let channel = self.config.release_channel;
                 if watches.is_empty() {
                     return Task::none();
                 }
@@ -1491,7 +1547,7 @@ impl Application for App {
                         let permits = Arc::clone(&permits);
                         tasks.spawn(async move {
                             let _permit = permits.acquire_owned().await;
-                            client.check(&watch).await
+                            client.check(&watch, channel).await
                         });
                     }
                     while let Some(joined) = tasks.join_next().await {
@@ -1513,6 +1569,20 @@ impl Application for App {
             Message::ReleaseChecked(status) => {
                 let key = format!("{}/{}", status.watch.host, status.watch.path);
                 let now = unix_now();
+
+                // This application's own watch is synthesized rather than
+                // stored, so the first time it is checked it is added to the
+                // list — otherwise its result would be forgotten on every
+                // restart and the entry would sit there looking inert.
+                if releases::self_key().as_deref() == Some(key.as_str())
+                    && !self
+                        .config
+                        .watches
+                        .iter()
+                        .any(|watch| format!("{}/{}", watch.host, watch.path) == key)
+                {
+                    self.config.watches.insert(0, status.watch.clone());
+                }
 
                 // Remembered on the watch itself so the page can say something
                 // after a restart without asking the forges again.
@@ -1765,6 +1835,15 @@ impl Application for App {
                 self.config.show_tray_icon = tray;
                 self.save_config();
                 self.apply_autostart(autostart);
+
+                // Something required is missing, so the first thing shown is
+                // what and why rather than an application that half works.
+                let missing = self
+                    .ready()
+                    .is_some_and(|ready| dependencies::has_missing_required(&ready.deps));
+                if missing {
+                    self.activate(&Page::Dependencies);
+                }
                 Task::none()
             }
 
@@ -1861,6 +1940,88 @@ impl Application for App {
                 Task::none()
             }
 
+            Message::ConfigChannel(index) => {
+                if let Some(channel) = Channel::ALL.get(index) {
+                    self.config.release_channel = *channel;
+                    self.save_config();
+                }
+                Task::none()
+            }
+
+            Message::DraftDirectory(text) => {
+                if let Some(ready) = self.ready_mut() {
+                    ready.directory_draft = text;
+                }
+                Task::none()
+            }
+
+            Message::AddDirectory => {
+                let Some(ready) = self.ready_mut() else {
+                    return Task::none();
+                };
+                let directory = ready.directory_draft.trim().to_owned();
+                if directory.is_empty() || self.config.appimage_dirs.contains(&directory) {
+                    return Task::none();
+                }
+                if let Some(ready) = self.ready_mut() {
+                    ready.directory_draft.clear();
+                }
+                self.config.appimage_dirs.push(directory);
+                self.save_config();
+                Task::none()
+            }
+
+            Message::RemoveDirectory(directory) => {
+                self.config.appimage_dirs.retain(|entry| *entry != directory);
+                self.save_config();
+                Task::none()
+            }
+
+            Message::RecheckDependencies => {
+                if let Some(ready) = self.ready_mut() {
+                    ready.deps = dependencies::check();
+                }
+                Task::none()
+            }
+
+            Message::InstallDependency(binary) => {
+                let Some(dependency) = dependencies::ALL
+                    .iter()
+                    .find(|dependency| dependency.binary == binary)
+                    .cloned()
+                else {
+                    return Task::none();
+                };
+                if let Some(ready) = self.ready_mut() {
+                    ready.installing_dep = Some(binary.clone());
+                }
+                cosmic::task::future(async move {
+                    let result = dependencies::install(&dependency)
+                        .await
+                        .map(|()| binary.clone())
+                        .map_err(|error| (binary, error.to_string()));
+                    Message::DependencyInstalled(Box::new(result))
+                })
+            }
+
+            Message::DependencyInstalled(result) => {
+                if let Some(ready) = self.ready_mut() {
+                    ready.installing_dep = None;
+                    // Re-checked rather than assumed: an install that reported
+                    // success but put nothing on PATH should still read as
+                    // missing.
+                    ready.deps = dependencies::check();
+                    if let Err((name, message)) = *result {
+                        ready.status = Some(fl!(
+                            "dependencies-install-failed",
+                            name = name,
+                            message = message
+                        ));
+                    }
+                }
+                Task::none()
+            }
+
             Message::ConfigUpdated(config) => {
                 self.config = config;
                 Task::none()
@@ -1881,6 +2042,7 @@ impl Application for App {
                 Page::Run => self.view_run(),
                 Page::Releases => self.view_releases(ready),
                 Page::History => self.view_history(ready),
+                Page::Dependencies => self.view_dependencies(ready),
                 Page::Schedule => self.view_schedule(ready),
                 Page::Configuration => self.view_configuration(ready),
             },
@@ -2229,6 +2391,94 @@ impl App {
             .into()
     }
 
+    /// The tools this application drives, and whether they are here.
+    fn view_dependencies<'a>(&'a self, ready: &'a Ready) -> Element<'a, Message> {
+        let missing = ready.deps.iter().filter(|report| report.is_problem()).count();
+        let can_install = dependencies::Manager::detect().is_some();
+
+        let mut column = widget::column::with_children(Vec::new())
+            .spacing(12)
+            .push(widget::text::title2(fl!("dependencies-heading")))
+            .push(widget::text::body(fl!("dependencies-description")))
+            .push(widget::text::body(if missing == 0 {
+                fl!("dependencies-all-present")
+            } else {
+                fl!("dependencies-missing-required", count = missing)
+            }));
+
+        if !can_install {
+            column = column.push(widget::text::caption(fl!("dependencies-no-manager")));
+        }
+        if let Some(status) = &ready.status {
+            column = column.push(widget::text::caption(status.clone()));
+        }
+
+        column = column.push(
+            widget::button::standard(fl!("dependencies-recheck"))
+                .on_press(Message::RecheckDependencies),
+        );
+
+        let mut section = widget::settings::section();
+        for report in &ready.deps {
+            let requirement = match report.dependency.requirement {
+                Requirement::Required => fl!("dependencies-required"),
+                Requirement::Optional => fl!("dependencies-optional"),
+            };
+            let state = if report.installed {
+                fl!("dependencies-installed")
+            } else {
+                fl!("dependencies-missing")
+            };
+
+            let mut controls = widget::row::with_children(Vec::new())
+                .spacing(8)
+                .align_y(Alignment::Center)
+                .push(widget::text::caption(format!("{requirement} · {state}")));
+
+            // Offered only for what is actually absent, and only where there is
+            // a package manager to do it with.
+            if !report.installed && can_install {
+                let binary = report.dependency.binary.to_owned();
+                let busy = ready.installing_dep.as_deref() == Some(report.dependency.binary);
+                controls = controls.push(
+                    widget::button::suggested(if busy {
+                        fl!("dependencies-installing")
+                    } else {
+                        fl!("dependencies-install")
+                    })
+                    .on_press_maybe(
+                        ready
+                            .installing_dep
+                            .is_none()
+                            .then_some(Message::InstallDependency(binary)),
+                    ),
+                );
+            }
+
+            // The resolved path is shown for what is present: "which one is it
+            // actually using" is the question asked when a tool misbehaves.
+            let description = match &report.path {
+                Some(path) => format!("{}\n{path}", report.dependency.purpose()),
+                None => report.dependency.purpose(),
+            };
+
+            section = section.add(
+                widget::settings::item::builder(report.dependency.binary.to_owned())
+                    .description(description)
+                    .icon(widget::icon::from_name(if report.installed {
+                        "emblem-ok-symbolic"
+                    } else if report.is_problem() {
+                        "dialog-error-symbolic"
+                    } else {
+                        "dialog-information-symbolic"
+                    }))
+                    .control(controls),
+            );
+        }
+
+        widget::scrollable(column.push(section)).into()
+    }
+
     /// Projects watched for new releases, or the picker for choosing them.
     fn view_releases<'a>(&'a self, ready: &'a Ready) -> Element<'a, Message> {
         let mut column = widget::column::with_children(Vec::new())
@@ -2309,43 +2559,6 @@ impl App {
         }
         column = column.push(actions);
 
-        let interval_index = CheckInterval::ALL
-            .iter()
-            .position(|interval| *interval == self.config.release_check_interval);
-        column = column.push(
-            widget::settings::section().add(
-                widget::settings::item::builder(fl!("releases-interval"))
-                    .description(match self.config.last_release_check {
-                        0 => fl!("releases-never-checked"),
-                        last => {
-                            let mut text = fl!(
-                                "releases-last-checked",
-                                when = crate::history::format_timestamp(last)
-                            );
-                            // Says when the cap next lifts, so "nothing
-                            // happened when I opened it" has a visible reason.
-                            if let Some(next) =
-                                self.config.release_check_interval.next_due(last)
-                            {
-                                text.push_str(&format!(
-                                    " · {}",
-                                    fl!(
-                                        "releases-next-check",
-                                        when = crate::history::format_timestamp(next)
-                                    )
-                                ));
-                            }
-                            text
-                        }
-                    })
-                    .control(widget::dropdown(
-                        &self.interval_labels,
-                        interval_index,
-                        Message::ConfigCheckInterval,
-                    )),
-            ),
-        );
-
         if ready.discovering {
             column = column.push(widget::text::body(fl!("releases-finding")));
         }
@@ -2364,16 +2577,121 @@ impl App {
             column = column.push(widget::text::caption(status.clone()));
         }
 
-        if self.config.watches.is_empty() {
-            return column.push(widget::text::body(fl!("releases-none"))).into();
+        let interval_index = CheckInterval::ALL
+            .iter()
+            .position(|interval| *interval == self.config.release_check_interval);
+        let channel_index = Channel::ALL
+            .iter()
+            .position(|channel| *channel == self.config.release_channel);
+
+        // Built here but pushed after the list: these govern the page rather
+        // than being the point of it, and a screenful of controls in front of
+        // the projects would bury what the user came to look at.
+        let mut settings = widget::settings::section()
+            .add(
+                widget::settings::item::builder(fl!("releases-interval"))
+                    .description(match self.config.last_release_check {
+                        0 => fl!("releases-never-checked"),
+                        last => {
+                            let mut text = fl!(
+                                "releases-last-checked",
+                                when = crate::history::format_timestamp(last)
+                            );
+                            // Says when the cap next lifts, so "nothing
+                            // happened when I opened it" has a visible reason.
+                            if let Some(next) = self.config.release_check_interval.next_due(last) {
+                                text.push_str(&format!(
+                                    " · {}",
+                                    fl!(
+                                        "releases-next-check",
+                                        when = crate::history::format_timestamp(next)
+                                    )
+                                ));
+                            }
+                            text
+                        }
+                    })
+                    .control(widget::dropdown(
+                        &self.interval_labels,
+                        interval_index,
+                        Message::ConfigCheckInterval,
+                    )),
+            )
+            .add(
+                widget::settings::item::builder(fl!("releases-channel"))
+                    .description(fl!("releases-channel-description"))
+                    .control(widget::dropdown(
+                        &self.channel_labels,
+                        channel_index,
+                        Message::ConfigChannel,
+                    )),
+            )
+            .add(
+                widget::settings::item::builder(fl!("releases-directories"))
+                    .description(fl!("releases-directories-description"))
+                    .control(
+                        widget::row::with_children(Vec::new())
+                            .spacing(4)
+                            .push(
+                                widget::text_input(
+                                    fl!("releases-directory-placeholder"),
+                                    ready.directory_draft.clone(),
+                                )
+                                .on_input(Message::DraftDirectory)
+                                .on_submit(|_| Message::AddDirectory)
+                                .width(Length::Fixed(220.0)),
+                            )
+                            .push(
+                                widget::button::standard(fl!("releases-directory-add"))
+                                    .on_press_maybe(
+                                        (!ready.directory_draft.trim().is_empty())
+                                            .then_some(Message::AddDirectory),
+                                    ),
+                            ),
+                    ),
+            );
+
+        for directory in &self.config.appimage_dirs {
+            let remove = directory.clone();
+            settings = settings.add(
+                widget::settings::item::builder(directory.clone()).control(
+                    widget::button::icon(widget::icon::from_name("list-remove-symbolic"))
+                        .on_press(Message::RemoveDirectory(remove)),
+                ),
+            );
         }
 
-        let mut section = widget::settings::section().title(fl!(
-            "releases-watched",
-            count = self.config.watches.len()
-        ));
+        // This application's own project is listed first and always, however it
+        // was installed. It is synthesized rather than discovered, so building
+        // from source — where there is no file to find and nothing in any
+        // package database — still gets update notices.
+        let own_key = releases::self_key();
+        let mut listed: Vec<Watch> = Vec::new();
+        if let Some(own) = releases::self_watch() {
+            if !self
+                .config
+                .watches
+                .iter()
+                .any(|watch| Some(format!("{}/{}", watch.host, watch.path)) == own_key)
+            {
+                listed.push(own);
+            }
+        }
+        listed.extend(self.config.watches.iter().cloned().map(|mut watch| {
+            // The stored version is whatever was running when it was last
+            // checked; the running build is the truth. Without this, updating
+            // this application would leave it reporting its own old version as
+            // out of date until the next check.
+            if Some(format!("{}/{}", watch.host, watch.path)) == own_key {
+                watch.installed = env!("CARGO_PKG_VERSION").to_owned();
+            }
+            watch
+        }));
 
-        for watch in &self.config.watches {
+        let mut section = widget::settings::section()
+            .title(fl!("releases-watched", count = listed.len()));
+
+        for watch in &listed {
             let key = format!("{}/{}", watch.host, watch.path);
             let status = ready.statuses.get(&key);
             let installing = ready.installing.as_deref() == Some(key.as_str());
@@ -2442,19 +2760,31 @@ impl App {
                 }
             }
 
-            controls = controls.push(
-                widget::button::icon(widget::icon::from_name("list-remove-symbolic"))
-                    .on_press(Message::RemoveWatch(key.clone())),
-            );
+            if own_key.as_deref() != Some(key.as_str()) {
+                controls = controls.push(
+                    widget::button::icon(widget::icon::from_name("list-remove-symbolic"))
+                        .on_press(Message::RemoveWatch(key.clone())),
+                );
+            }
+
+            let is_self = own_key.as_deref() == Some(key.as_str());
+            let title = if is_self {
+                format!("{}  ({})  · {}", watch.name, watch.installed, fl!("releases-self"))
+            } else {
+                format!("{}  ({})", watch.name, watch.installed)
+            };
 
             section = section.add(
-                widget::settings::item::builder(format!("{}  ({})", watch.name, watch.installed))
+                widget::settings::item::builder(title)
                     .description(description)
                     .control(controls),
             );
         }
 
-        widget::scrollable(column.push(section)).into()
+        // The watched projects are what the page is for, so they come before
+        // the settings that govern them rather than below a screenful of
+        // controls.
+        widget::scrollable(column.push(section).push(settings)).into()
     }
 
     /// Past runs, or the transcript of one of them.

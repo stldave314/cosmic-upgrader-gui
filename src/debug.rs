@@ -64,6 +64,8 @@ pub const UI: &str = "ui";
 pub const HISTORY: &str = "hist";
 /// Discovering projects and checking them for newer releases.
 pub const RELEASES: &str = "rel";
+/// Checking for the tools this application drives.
+pub const DEPS: &str = "deps";
 
 /// Process start, so each line can be stamped with elapsed time rather than a
 /// wall clock the reader has to subtract by hand.

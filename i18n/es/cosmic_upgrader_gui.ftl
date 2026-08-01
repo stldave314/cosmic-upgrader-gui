@@ -241,3 +241,40 @@ releases-interval = Comprobar automáticamente
 releases-last-checked = Comprobado por última vez { $when }
 releases-never-checked = Aún sin comprobar
 releases-next-check = siguiente { $when }
+
+## Dependencies, release channel and directories
+
+channel-pre-release = Incluir betas y candidatas a versión final
+channel-stable = Solo estables
+dep-authentication-dismissed = Se canceló la autenticación.
+dep-curl = Obtiene información de publicaciones de los servidores de proyectos y descarga actualizaciones.
+dependencies-all-present = Todo lo que esta aplicación necesita está instalado.
+dependencies-description = Esta aplicación funciona controlando otros programas. Uno que falte se convierte en una función que no hace nada en silencio, así que aquí se listan con su finalidad.
+dependencies-heading = Herramientas necesarias
+dependencies-install = Instalar
+dependencies-installed = Instalado
+dependencies-install-failed = No se pudo instalar { $name }: { $message }
+dependencies-installing = Instalando…
+dependencies-missing = No instalado
+dependencies-no-manager = No se encontró un gestor de paquetes compatible, así que no se puede instalar desde aquí.
+dependencies-optional = Opcional
+dependencies-recheck = Comprobar de nuevo
+dependencies-required = Necesario
+dep-gh = Aporta sus credenciales de GitHub, elevando el límite de comprobaciones de 60 a 5000 peticiones por hora.
+dep-notify-send = Informa del resultado de una ejecución programada que nadie estaba mirando.
+dep-pkexec = Pide permisos de administrador mediante el diálogo del escritorio, para actualizaciones del sistema e instalación de paquetes.
+dep-systemctl = Mantiene la programación como un temporizador de usuario de systemd, para que se ejecute con esta ventana cerrada.
+dep-topgrade = Realiza las actualizaciones. Sin él, esta aplicación no tiene nada que controlar.
+dep-xdg-open = Abre páginas de publicaciones y enlaces en su navegador.
+nav-dependencies = Dependencias
+releases-channel = Publicaciones a ofrecer
+releases-directories = Carpetas de aplicaciones descargadas
+releases-directories-description = Se buscan AppImages y otros programas descargados. Las rutas relativas parten de su carpeta personal.
+releases-directory-add = Añadir carpeta
+releases-directory-placeholder = Applications
+releases-self = Esta aplicación
+dependencies-missing-required = { $count ->
+    [one] Falta 1 herramienta necesaria.
+   *[other] Faltan { $count } herramientas necesarias.
+}
+releases-channel-description = Si las candidatas y las betas cuentan como actualizaciones.

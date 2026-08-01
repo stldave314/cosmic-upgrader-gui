@@ -90,6 +90,33 @@ impl CheckInterval {
     }
 }
 
+/// Which releases count.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub enum Channel {
+    /// Finished releases only.
+    #[default]
+    Stable,
+    /// Also release candidates and betas — anything the project has published.
+    IncludePreRelease,
+}
+
+impl Channel {
+    pub const ALL: [Self; 2] = [Self::Stable, Self::IncludePreRelease];
+
+    /// Whether a release should be offered on this channel.
+    ///
+    /// Both signals are read: the forge's own flag, and the tag. A project that
+    /// tags `v2.0.0-rc1` without ticking the box on its release page is still
+    /// publishing a release candidate, and somebody who asked for stable
+    /// versions should not be shown one.
+    pub fn accepts(self, release: &Release) -> bool {
+        match self {
+            Self::IncludePreRelease => true,
+            Self::Stable => !release.pre_release && !version::is_pre_release(&release.tag),
+        }
+    }
+}
+
 /// A project the user has chosen to watch.
 ///
 /// Stored rather than re-detected each time, because the watch list is a
@@ -323,15 +350,14 @@ impl Client {
     }
 
     /// Check one watched project.
-    pub async fn check(&self, watch: &Watch) -> Status {
+    pub async fn check(&self, watch: &Watch, channel: Channel) -> Status {
         let repo = watch.repo();
         match self.releases(&repo).await {
             Ok((_, releases)) => {
-                // Pre-releases are skipped: somebody watching a project for
-                // updates wants the release, not the nightly. A project whose
-                // only releases are pre-releases reports as having none, which
-                // is the honest answer for a stable-only watch.
-                let latest = releases.into_iter().find(|release| !release.pre_release);
+                // A project whose only releases are pre-releases reports as
+                // having none on the stable channel, which is the honest answer
+                // rather than quietly offering one anyway.
+                let latest = releases.into_iter().find(|release| channel.accepts(release));
                 let comparison = latest
                     .as_ref()
                     .map(|release| version::compare(&watch.installed, &release.tag))
@@ -357,12 +383,43 @@ impl Client {
     }
 }
 
+/// This application's own project, as something to watch.
+///
+/// Synthesized from what is compiled in rather than discovered, so the check
+/// works however this was installed — from a package, from a downloaded
+/// archive, or built from source, where there is no file for detection to find
+/// and nothing in any package database to read.
+pub fn self_watch() -> Option<Watch> {
+    let repo = Repo::from_url(crate::constants::REPOSITORY_URL)?;
+    Some(Watch {
+        name: env!("CARGO_PKG_NAME").to_owned(),
+        kind: match repo.kind {
+            Kind::GitHub => "github",
+            Kind::GitLab => "gitlab",
+            Kind::Gitea => "gitea",
+        }
+        .to_owned(),
+        host: repo.host,
+        path: repo.path,
+        installed: env!("CARGO_PKG_VERSION").to_owned(),
+        source: "deb".to_owned(),
+        latest_tag: String::new(),
+        checked: 0,
+    })
+}
+
+/// The key identifying this application's own watch, so the interface can pin
+/// it and refuse to remove it.
+pub fn self_key() -> Option<String> {
+    self_watch().map(|watch| format!("{}/{}", watch.host, watch.path))
+}
+
 /// Propose everything on this machine that has a project behind it.
 ///
 /// Deduplicated by project, because several packages routinely share one — a
 /// library and its `-dev` package point at the same repository, and offering
 /// both would be offering the same update twice.
-pub async fn discover() -> Vec<detect::Candidate> {
+pub async fn discover(appimage_dirs: &[String]) -> Vec<detect::Candidate> {
     let mut candidates = Vec::new();
 
     match tokio::fs::read_to_string("/var/lib/dpkg/status").await {
@@ -386,7 +443,7 @@ pub async fn discover() -> Vec<detect::Candidate> {
         }
     }
 
-    candidates.extend(detect::find_appimages());
+    candidates.extend(detect::find_appimages(appimage_dirs));
 
     let mut seen: HashMap<String, usize> = HashMap::new();
     let mut unique: Vec<detect::Candidate> = Vec::new();
@@ -432,6 +489,55 @@ mod tests {
             repo: Repo::from_url(&format!("https://{host}/{path}")),
             source: detect::Source::Deb,
         }
+    }
+
+    fn release(tag: &str, flagged: bool) -> Release {
+        Release {
+            tag: tag.to_owned(),
+            name: tag.to_owned(),
+            published: String::new(),
+            notes: String::new(),
+            web_url: String::new(),
+            assets: Vec::new(),
+            pre_release: flagged,
+        }
+    }
+
+    #[test]
+    fn the_stable_channel_declines_a_flagged_pre_release() {
+        assert!(!Channel::Stable.accepts(&release("v2.0.0", true)));
+    }
+
+    #[test]
+    fn the_stable_channel_declines_a_pre_release_the_forge_did_not_flag() {
+        // The case that matters: plenty of projects tag `-rc1` and never tick
+        // the box on the release page.
+        assert!(!Channel::Stable.accepts(&release("v2.0.0-rc1", false)));
+        assert!(!Channel::Stable.accepts(&release("v2.0.0-beta", false)));
+    }
+
+    #[test]
+    fn the_stable_channel_accepts_a_finished_release() {
+        assert!(Channel::Stable.accepts(&release("v2.0.0", false)));
+        // A Debian-style revision is not a pre-release.
+        assert!(Channel::Stable.accepts(&release("1.2.3-2ubuntu0.1", false)));
+    }
+
+    #[test]
+    fn the_pre_release_channel_accepts_everything() {
+        assert!(Channel::IncludePreRelease.accepts(&release("v2.0.0-rc1", true)));
+        assert!(Channel::IncludePreRelease.accepts(&release("v2.0.0", false)));
+    }
+
+    #[test]
+    fn this_application_watches_itself() {
+        // Synthesized, so it works however this was installed — including from
+        // source, where nothing on disk would identify it.
+        let watch = self_watch().expect("the compiled-in repository should parse");
+        assert_eq!(watch.installed, env!("CARGO_PKG_VERSION"));
+        assert_eq!(watch.repo().kind, Kind::GitHub);
+        assert!(watch.path.ends_with("cosmic-upgrader-gui"), "{}", watch.path);
+        assert_eq!(self_key().as_deref(), Some(format!("{}/{}", watch.host, watch.path).as_str()));
     }
 
     #[test]
@@ -603,7 +709,11 @@ mod live_tests {
     #[tokio::test]
     #[ignore]
     async fn live_discovers_projects_from_this_machine() {
-        let found = discover().await;
+        let directories: Vec<String> = crate::constants::APPIMAGE_SEARCH_DIRS
+            .iter()
+            .map(|d| (*d).to_owned())
+            .collect();
+        let found = discover(&directories).await;
         println!("{} candidates", found.len());
         let forges: HashMap<String, usize> =
             found.iter().filter_map(|c| c.repo.as_ref()).fold(

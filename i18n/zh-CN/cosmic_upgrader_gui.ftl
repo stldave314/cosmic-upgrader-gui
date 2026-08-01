@@ -240,3 +240,39 @@ releases-interval = 自动检查
 releases-last-checked = 上次检查 { $when }
 releases-never-checked = 尚未检查
 releases-next-check = 下次 { $when }
+
+## Dependencies, release channel and directories
+
+channel-pre-release = 包含测试版和候选发布版
+channel-stable = 仅稳定版
+dep-authentication-dismissed = 身份验证已取消。
+dep-curl = 从项目主机获取发布信息并下载更新。
+dependencies-all-present = 此应用程序所需的一切均已安装。
+dependencies-description = 此应用程序通过驱动其他程序来工作。缺少某个程序会让相应功能悄无声息地失效，因此在此列出它们及其用途。
+dependencies-heading = 所需工具
+dependencies-install = 安装
+dependencies-installed = 已安装
+dependencies-install-failed = 无法安装 { $name }：{ $message }
+dependencies-installing = 正在安装…
+dependencies-missing = 未安装
+dependencies-no-manager = 未找到受支持的包管理器，因此无法从此处安装。
+dependencies-optional = 可选
+dependencies-recheck = 重新检查
+dependencies-required = 必需
+dep-gh = 使用您的 GitHub 凭据，将发布检查上限从每小时 60 次提升到 5000 次。
+dep-notify-send = 报告无人查看的计划运行的结果。
+dep-pkexec = 通过桌面自带的对话框请求管理员权限，用于系统升级和软件包安装。
+dep-systemctl = 以 systemd 用户定时器的形式保持升级计划，使其在此窗口关闭时也能运行。
+dep-topgrade = 执行升级本身。没有它，此应用程序就无事可做。
+dep-xdg-open = 在浏览器中打开发布页面和链接。
+nav-dependencies = 依赖项
+releases-channel = 要提供的发布
+releases-directories = 已下载应用程序的目录
+releases-directories-description = 会在其中查找 AppImage 和其他已下载的程序。相对路径从您的主目录开始。
+releases-directory-add = 添加目录
+releases-directory-placeholder = Applications
+releases-self = 此应用程序
+dependencies-missing-required = { $count ->
+   *[other] 缺少 { $count } 个必需的工具。
+}
+releases-channel-description = 候选发布版和测试版是否算作更新。

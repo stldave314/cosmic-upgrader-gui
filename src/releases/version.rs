@@ -161,6 +161,15 @@ fn normalize_pre_release(remainder: &str) -> String {
     String::new()
 }
 
+/// Whether a tag names a pre-release.
+///
+/// Forges carry a flag for this, but plenty of projects never set it and say so
+/// in the tag instead — `1.3.0-rc1`, `2.0.0-beta`, `v5-alpha2`. Reading both is
+/// what makes "stable only" mean it.
+pub fn is_pre_release(tag: &str) -> bool {
+    parse(tag).is_some_and(|parsed| !parsed.pre_release.is_empty())
+}
+
 /// Compare an installed version with a release tag.
 pub fn compare(installed: &str, candidate: &str) -> Ordering {
     let (Some(installed), Some(candidate)) = (parse(installed), parse(candidate)) else {
@@ -196,6 +205,21 @@ pub fn compare(installed: &str, candidate: &str) -> Ordering {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_pre_release_is_recognised_from_its_tag_alone() {
+        // Many projects never set the forge's own pre-release flag.
+        for tag in ["1.3.0-rc1", "v2.0.0-beta", "1.0.0-alpha2", "3.0~beta1", "1.0.0-nightly"] {
+            assert!(is_pre_release(tag), "{tag} should be a pre-release");
+        }
+    }
+
+    #[test]
+    fn a_plain_release_is_not_a_pre_release() {
+        for tag in ["1.2.3", "v17.9.0", "2024-01-15", "1.2.3-2ubuntu0.1"] {
+            assert!(!is_pre_release(tag), "{tag} should not be a pre-release");
+        }
+    }
 
     #[test]
     fn a_higher_number_is_newer() {

@@ -16,7 +16,8 @@ use cosmic::{
 use serde::{Deserialize, Serialize};
 
 use crate::constants::DEFAULT_KEEP_RUNS;
-use crate::releases::{CheckInterval, Watch};
+use crate::constants::APPIMAGE_SEARCH_DIRS;
+use crate::releases::{Channel, CheckInterval, Watch};
 use crate::schedule::Schedule;
 
 /// Bumped when a field is removed or its meaning changes, so `cosmic-config`
@@ -118,6 +119,13 @@ pub struct Config {
     pub watches: Vec<Watch>,
     /// How often releases are checked without being asked.
     pub release_check_interval: CheckInterval,
+    /// Whether release candidates and betas count as updates.
+    pub release_channel: Channel,
+    /// Directories searched for downloaded applications.
+    ///
+    /// Relative entries are taken from the home directory; absolute ones are
+    /// used as given, so somewhere outside home can be added.
+    pub appimage_dirs: Vec<String>,
     /// When the last release check ran, in seconds since the Unix epoch.
     pub last_release_check: i64,
     /// When the in-app fallback scheduler last started a run, in seconds since
@@ -144,6 +152,11 @@ impl Default for Config {
             keep_run_logs: DEFAULT_KEEP_RUNS,
             watches: Vec::new(),
             release_check_interval: CheckInterval::default(),
+            release_channel: Channel::default(),
+            appimage_dirs: APPIMAGE_SEARCH_DIRS
+                .iter()
+                .map(|directory| (*directory).to_owned())
+                .collect(),
             last_release_check: 0,
             schedule: Schedule::default(),
             last_fallback_run: 0,

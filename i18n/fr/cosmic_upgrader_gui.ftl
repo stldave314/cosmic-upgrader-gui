@@ -241,3 +241,40 @@ releases-interval = Vérifier automatiquement
 releases-last-checked = Dernière vérification { $when }
 releases-never-checked = Pas encore vérifié
 releases-next-check = prochaine { $when }
+
+## Dependencies, release channel and directories
+
+channel-pre-release = Inclure les bêtas et les préversions
+channel-stable = Stables uniquement
+dep-authentication-dismissed = L'authentification a été annulée.
+dep-curl = Récupère les informations de publication auprès des hôtes de projets et télécharge les mises à jour.
+dependencies-all-present = Tout ce dont cette application a besoin est installé.
+dependencies-description = Cette application fonctionne en pilotant d'autres programmes. Un programme manquant devient une fonction qui ne fait rien en silence, ils sont donc listés ici avec leur rôle.
+dependencies-heading = Outils nécessaires
+dependencies-install = Installer
+dependencies-installed = Installé
+dependencies-install-failed = { $name } n'a pas pu être installé : { $message }
+dependencies-installing = Installation…
+dependencies-missing = Non installé
+dependencies-no-manager = Aucun gestionnaire de paquets pris en charge n'a été trouvé, l'installation depuis ici est impossible.
+dependencies-optional = Facultatif
+dependencies-recheck = Vérifier à nouveau
+dependencies-required = Requis
+dep-gh = Transmet vos identifiants GitHub, faisant passer la limite de vérification de 60 à 5000 requêtes par heure.
+dep-notify-send = Signale le résultat d'une exécution planifiée que personne ne regardait.
+dep-pkexec = Demande les droits d'administrateur via la boîte de dialogue du bureau, pour les mises à niveau système et l'installation de paquets.
+dep-systemctl = Tient la planification sous forme de minuterie utilisateur systemd, pour qu'elle s'exécute fenêtre fermée.
+dep-topgrade = Effectue les mises à niveau elles-mêmes. Sans lui, cette application n'a rien à piloter.
+dep-xdg-open = Ouvre les pages de publication et les liens dans votre navigateur.
+nav-dependencies = Dépendances
+releases-channel = Publications à proposer
+releases-directories = Dossiers des applications téléchargées
+releases-directories-description = Ces dossiers sont parcourus à la recherche d'AppImages et d'autres programmes téléchargés. Les chemins relatifs partent de votre dossier personnel.
+releases-directory-add = Ajouter un dossier
+releases-directory-placeholder = Applications
+releases-self = Cette application
+dependencies-missing-required = { $count ->
+    [one] 1 outil requis est manquant.
+   *[other] { $count } outils requis sont manquants.
+}
+releases-channel-description = Si les préversions et les bêtas comptent comme des mises à jour.

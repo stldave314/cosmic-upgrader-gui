@@ -1,6 +1,6 @@
 [package]
 name = "cosmic-upgrader-gui"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "GPL-3.0"
 description = "A COSMIC Desktop front-end for topgrade — configure, schedule and run system-wide upgrades"

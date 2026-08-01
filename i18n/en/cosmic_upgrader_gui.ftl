@@ -252,3 +252,43 @@ interval-daily = Daily
 interval-weekly = Weekly
 releases-next-check = next { $when }
 run-was-preview = This was a preview — nothing on the system was changed.
+
+## Dependencies
+
+nav-dependencies = Dependencies
+dependencies-heading = Required tools
+dependencies-description = This application works by driving other programs. A missing one turns into a feature that quietly does nothing, so they are listed here with what each is for.
+dependencies-required = Required
+dependencies-optional = Optional
+dependencies-installed = Installed
+dependencies-missing = Not installed
+dependencies-install = Install
+dependencies-installing = Installing…
+dependencies-recheck = Check again
+dependencies-all-present = Everything this application needs is installed.
+dependencies-missing-required = { $count ->
+    [one] 1 required tool is missing.
+   *[other] { $count } required tools are missing.
+}
+dependencies-no-manager = No supported package manager was found, so these cannot be installed from here.
+dependencies-install-failed = { $name } could not be installed: { $message }
+dep-authentication-dismissed = Authentication was dismissed.
+dep-topgrade = Performs the upgrades themselves. Without it this application has nothing to drive.
+dep-curl = Fetches release information from project hosts, and downloads updates.
+dep-gh = Carries your GitHub credentials, raising the release-check limit from 60 requests an hour to 5000.
+dep-pkexec = Asks for administrator rights through the desktop's own dialog, for system upgrades and package installs.
+dep-notify-send = Reports the result of a scheduled run, which nobody was watching.
+dep-systemctl = Keeps the upgrade schedule as a systemd user timer, so it runs when this window is closed.
+dep-xdg-open = Opens release pages and links in your browser.
+
+## Release channel and directories
+
+releases-channel = Releases to offer
+channel-stable = Stable only
+channel-pre-release = Include betas and release candidates
+releases-self = This application
+releases-directories = Where downloaded applications are kept
+releases-directories-description = Searched for AppImages and other downloaded programs. Relative paths are taken from your home directory.
+releases-directory-add = Add directory
+releases-directory-placeholder = Applications
+releases-channel-description = Whether release candidates and betas count as updates.

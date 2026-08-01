@@ -243,3 +243,42 @@ releases-interval = Проверять автоматически
 releases-last-checked = Последняя проверка { $when }
 releases-never-checked = Ещё не проверялось
 releases-next-check = следующая { $when }
+
+## Dependencies, release channel and directories
+
+channel-pre-release = Включать бета-версии и предварительные выпуски
+channel-stable = Только стабильные
+dep-authentication-dismissed = Аутентификация отменена.
+dep-curl = Получает сведения о выпусках с серверов проектов и загружает обновления.
+dependencies-all-present = Всё необходимое для этого приложения установлено.
+dependencies-description = Это приложение работает, управляя другими программами. Отсутствующая программа превращается в функцию, которая молча ничего не делает, поэтому они перечислены здесь с указанием назначения.
+dependencies-heading = Необходимые инструменты
+dependencies-install = Установить
+dependencies-installed = Установлено
+dependencies-install-failed = Не удалось установить { $name }: { $message }
+dependencies-installing = Установка…
+dependencies-missing = Не установлено
+dependencies-no-manager = Поддерживаемый менеджер пакетов не найден, поэтому отсюда ничего установить нельзя.
+dependencies-optional = Необязательно
+dependencies-recheck = Проверить снова
+dependencies-required = Обязательно
+dep-gh = Передаёт ваши учётные данные GitHub, повышая предел проверок с 60 до 5000 запросов в час.
+dep-notify-send = Сообщает результат запуска по расписанию, за которым никто не следил.
+dep-pkexec = Запрашивает права администратора через окно рабочего стола — для обновлений системы и установки пакетов.
+dep-systemctl = Хранит расписание как пользовательский таймер systemd, чтобы оно работало при закрытом окне.
+dep-topgrade = Выполняет сами обновления. Без него этому приложению нечем управлять.
+dep-xdg-open = Открывает страницы выпусков и ссылки в браузере.
+nav-dependencies = Зависимости
+releases-channel = Какие выпуски предлагать
+releases-directories = Каталоги загруженных приложений
+releases-directories-description = В них ищутся AppImage и другие загруженные программы. Относительные пути отсчитываются от домашнего каталога.
+releases-directory-add = Добавить каталог
+releases-directory-placeholder = Applications
+releases-self = Это приложение
+dependencies-missing-required = { $count ->
+    [one] Отсутствует 1 необходимый инструмент.
+    [few] Отсутствует { $count } необходимых инструмента.
+    [many] Отсутствует { $count } необходимых инструментов.
+   *[other] Отсутствует { $count } необходимого инструмента.
+}
+releases-channel-description = Считать ли предварительные выпуски и бета-версии обновлениями.
