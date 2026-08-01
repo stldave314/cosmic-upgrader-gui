@@ -22,7 +22,7 @@ use crate::schedule::Schedule;
 
 /// Bumped when a field is removed or its meaning changes, so `cosmic-config`
 /// discards an incompatible stored config rather than mis-reading it.
-pub const CONFIG_VERSION: u64 = 1;
+pub const CONFIG_VERSION: u64 = 2;
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub enum AppTheme {
@@ -66,7 +66,7 @@ pub enum PrivilegeMode {
 }
 
 #[derive(Clone, CosmicConfigEntry, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[version = 1]
+#[version = 2]
 pub struct Config {
     pub app_theme: AppTheme,
     /// How privileged steps get their authorization.
@@ -107,17 +107,12 @@ pub struct Config {
     pub clamscan_target: String,
     /// When upgrades run unattended.
     pub schedule: Schedule,
-    /// Keep running in the background when the window is closed, with an icon
-    /// in the panel's status area to bring it back.
+    /// Whether an icon is shown in the panel's status area.
     ///
-    /// Off unless asked for: an application that does not quit when you close it
-    /// is a surprise, and one that does so silently is a rude one.
-    pub minimize_to_tray: bool,
-    /// Whether the status-area icon is shown at all.
-    ///
-    /// Separate from [`Self::minimize_to_tray`] because they are different
-    /// wishes: some people want the icon for quick access without changing what
-    /// closing the window does.
+    /// It raises the window, starts an upgrade without opening it, and quits.
+    /// It deliberately does not hide the window: Wayland has no way for a client
+    /// to undo minimizing itself, so an icon that put the window away could not
+    /// bring it back.
     pub show_tray_icon: bool,
     /// Whether the first-run questions have been answered.
     ///
@@ -166,7 +161,6 @@ impl Default for Config {
             clamav_scan: false,
             clamscan_options: CLAMSCAN_DEFAULT_OPTIONS.to_owned(),
             clamscan_target: CLAMSCAN_DEFAULT_TARGET.to_owned(),
-            minimize_to_tray: false,
             show_tray_icon: false,
             first_run_completed: false,
             keep_run_logs: DEFAULT_KEEP_RUNS,

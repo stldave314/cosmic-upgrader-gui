@@ -409,18 +409,27 @@ in a control that would rewrite it.
 `--minimized` so logging in does not open a window.
 
 **The status area** icon is a freedesktop StatusNotifierItem, which is what
-COSMIC's `cosmic-applet-status-area` implements. It offers Show, Hide, Run
-upgrade and Quit, and its menu reflects whether a run is in progress.
+COSMIC's `cosmic-applet-status-area` implements. It raises the window, starts an
+upgrade without opening it, and quits.
 
-One limitation worth stating plainly: **the window manager's close button still
-quits.** Hiding to the status area works from the Hide button and from the tray
-menu, because those hide the window rather than closing it. Intercepting the
-close button needs libcosmic's `exit_on_close` — it is `pub(crate)` in the
-revision this builds against, with no public setter, so an application cannot
-outlive its main window. If that changes upstream, this becomes a one-line
-change.
+It deliberately does **not** hide the window, because on this stack that cannot
+be made to work and half of it working is worse than none. Three routes were
+tried against COSMIC, each verified by driving the tray's own D-Bus menu and
+comparing the screen before and after:
 
-Both questions are asked once, on first launch, and are in Settings afterwards.
+| Route | Result |
+| --- | --- |
+| `window::set_mode(Hidden)` | Accepted, does nothing — screen unchanged |
+| `window::minimize(id, true)` | Works, but **nothing can undo it** |
+| Closing the window | Ends the application |
+
+The second is the interesting one. Wayland's xdg-shell has `set_minimized` and
+deliberately no inverse: a client cannot un-minimize itself. An icon that put the
+window away and could not bring it back would be a trap, so the item is not
+offered.
+
+Both are asked on the first screen and live in Settings afterwards, where
+**Set-up screen** brings that first screen back.
 
 ## Your configuration file is yours
 

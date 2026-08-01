@@ -32,6 +32,11 @@
   </developer>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.4.1" date="2026-07-31">
+      <description>
+        <p>fix: remove hide-to-tray, which cannot work, and add a way back to the first screen</p>
+      </description>
+    </release>
     <release version="0.4.0" date="2026-07-31">
       <description>
         <p>feat: manage the repositories packages come from</p>

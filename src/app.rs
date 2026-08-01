@@ -177,7 +177,6 @@ pub enum Message {
 
     TrayStarted(Option<TrayHandles>),
     TrayCommand(Option<tray::Command>),
-    HideWindow,
     ShowWindow,
     Quit,
 
@@ -189,6 +188,7 @@ pub enum Message {
     RemoveCommand(String, String),
 
     FinishWelcome,
+    ShowWelcome,
     ConfigNotifyUpgrades(bool),
     ConfigNotifyErrors(bool),
     ConfigClamavScan(bool),
@@ -196,7 +196,6 @@ pub enum Message {
     ConfigClamscanOptions(String),
     ConfigClamscanTarget(String),
     ConfigAutostart(bool),
-    ConfigMinimizeToTray(bool),
     ConfigShowTrayIcon(bool),
     ScheduleApplied(Box<Result<Option<String>, String>>),
 
@@ -358,8 +357,6 @@ pub struct App {
     tray: Option<Arc<tray::Tray>>,
     /// Commands arriving from the status area.
     tray_commands: Option<Arc<Mutex<tokio::sync::mpsc::UnboundedReceiver<tray::Command>>>>,
-    /// Whether the window is currently hidden into the status area.
-    hidden: bool,
     run_log_id: widget::Id,
     theme_labels: Vec<String>,
     privilege_labels: Vec<String>,
@@ -705,7 +702,6 @@ impl Application for App {
             password_visible: false,
             tray: None,
             tray_commands: None,
-            hidden: false,
             run_log_id: widget::Id::new("run-log"),
             theme_labels: vec![fl!("theme-system"), fl!("theme-light"), fl!("theme-dark")],
             privilege_labels: vec![fl!("privilege-pty"), fl!("privilege-pkexec")],
@@ -781,21 +777,6 @@ impl Application for App {
 
     fn header_end(&self) -> Vec<Element<'_, Message>> {
         let mut elements: Vec<Element<'_, Message>> = Vec::new();
-
-        // Only offered when there is an icon to come back from; hiding a window
-        // with no way to restore it would be a trap.
-        if self.tray.is_some() && self.config.minimize_to_tray {
-            elements.push(
-                widget::tooltip(
-                    widget::button::icon(widget::icon::from_name("go-down-symbolic"))
-                        .on_press(Message::HideWindow)
-                        .padding(8),
-                    widget::text(fl!("hide-to-tray")),
-                    widget::tooltip::Position::Bottom,
-                )
-                .into(),
-            );
-        }
 
         elements.extend(vec![
             widget::button::icon(widget::icon::from_name("emblem-system-symbolic"))
@@ -1754,7 +1735,6 @@ impl Application for App {
                 };
                 let action = match command {
                     tray::Command::Show => cosmic::task::message(Message::ShowWindow),
-                    tray::Command::Hide => cosmic::task::message(Message::HideWindow),
                     tray::Command::Run => {
                         cosmic::task::message(Message::RequestRun { dry_run: false })
                     }
@@ -1763,24 +1743,14 @@ impl Application for App {
                 Task::batch([action, next])
             }
 
-            Message::HideWindow => {
-                let Some(id) = self.core.main_window_id() else {
-                    return Task::none();
-                };
-                self.hidden = true;
-                // Hidden rather than closed: libcosmic ends the application when
-                // the main window closes, and there is no public setting to
-                // change that, so the window has to stay alive to come back.
-                cosmic::iced::window::set_mode(id, cosmic::iced::window::Mode::Hidden)
-            }
-
             Message::ShowWindow => {
                 let Some(id) = self.core.main_window_id() else {
                     return Task::none();
                 };
-                self.hidden = false;
                 Task::batch([
-                    cosmic::iced::window::set_mode(id, cosmic::iced::window::Mode::Windowed),
+                    // Raises and focuses an ordinary window. It cannot recover
+                    // a minimized one — Wayland has no request for that — which
+                    // is why nothing here minimizes.
                     cosmic::iced::window::gain_focus(id),
                 ])
             }
@@ -1870,6 +1840,18 @@ impl Application for App {
                 Task::none()
             }
 
+            Message::ShowWelcome => {
+                // The screen is only in the sidebar while it has not been
+                // finished, so bringing it back means marking it unfinished.
+                // Nothing it sets is lost — those are ordinary settings.
+                self.config.first_run_completed = false;
+                self.save_config();
+                self.rebuild_nav();
+                self.activate(&Page::Welcome);
+                self.core.window.show_context = false;
+                Task::none()
+            }
+
             Message::ConfigNotifyUpgrades(value) => {
                 self.config.notify_upgrades = value;
                 self.save_config();
@@ -1920,21 +1902,8 @@ impl Application for App {
                 Task::none()
             }
 
-            Message::ConfigMinimizeToTray(value) => {
-                self.config.minimize_to_tray = value;
-                // Closing to an icon that is not shown would leave no way back.
-                if value {
-                    self.config.show_tray_icon = true;
-                }
-                self.save_config();
-                Task::none()
-            }
-
             Message::ConfigShowTrayIcon(value) => {
                 self.config.show_tray_icon = value;
-                if !value {
-                    self.config.minimize_to_tray = false;
-                }
                 self.save_config();
 
                 if value {
@@ -3724,12 +3693,16 @@ impl App {
                 )
                 .add(
                     widget::settings::item::builder(fl!("show-tray-icon"))
+                        .description(fl!("show-tray-icon-description"))
                         .toggler(self.config.show_tray_icon, Message::ConfigShowTrayIcon),
                 )
                 .add(
-                    widget::settings::item::builder(fl!("minimize-to-tray"))
-                        .description(fl!("minimize-to-tray-description"))
-                        .toggler(self.config.minimize_to_tray, Message::ConfigMinimizeToTray),
+                    widget::settings::item::builder(fl!("welcome-show-again"))
+                        .description(fl!("welcome-show-again-description"))
+                        .control(
+                            widget::button::standard(fl!("nav-welcome"))
+                                .on_press(Message::ShowWelcome),
+                        ),
                 )
                 .into(),
         ])

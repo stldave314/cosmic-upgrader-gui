@@ -8,20 +8,23 @@
 //! module is the small amount on top which says what the item is and turns
 //! clicks into messages the application already understands.
 //!
-//! ## What hiding means here
+//! ## Why there is no "hide to the status area"
 //!
-//! The window is *hidden*, not closed: `window::set_mode(Hidden)` leaves it
-//! alive and simply stops showing it. That matters, because in this revision of
-//! libcosmic an application cannot outlive its main window — `exit_on_close` and
-//! `exit_on_main_window_closed` are both `pub(crate)` with no setter, so there
-//! is no supported way to keep the event loop running once the window has
-//! actually closed.
+//! Because it cannot be made to work here, and half of it working is worse than
+//! none of it. Three routes were tried against COSMIC:
 //!
-//! The consequence is worth being plain about: hiding to the status area works
-//! from the application's own control and from this menu, but the window
-//! manager's close button still quits, because libcosmic closes the window
-//! before the application is consulted. Turning that into "close to the status
-//! area" needs a public setter upstream.
+//! * `window::set_mode(Hidden)` is accepted and does nothing. Driving it through
+//!   this very menu over D-Bus and comparing the screen before and after shows
+//!   an unchanged display.
+//! * `window::minimize(id, true)` does work — but nothing can undo it. Wayland's
+//!   xdg-shell has `set_minimized` and deliberately no inverse: a client cannot
+//!   un-minimize itself, so the icon could put the window away and never bring
+//!   it back.
+//! * Closing the window ends the application, since libcosmic's
+//!   `exit_on_main_window_closed` is `pub(crate)` with no setter.
+//!
+//! So the item is not offered. What the status area *can* do it does: raise the
+//! window, start an upgrade without opening it, and quit.
 
 use tokio::sync::mpsc;
 
@@ -35,8 +38,6 @@ use crate::fl;
 pub enum Command {
     /// Bring the window back.
     Show,
-    /// Put the window away, leaving the icon.
-    Hide,
     /// Start an upgrade without opening the window first.
     Run,
     Quit,
@@ -110,13 +111,6 @@ impl ksni::Tray for Item {
                 activate: Box::new(|item: &mut Self| item.send(Command::Show)),
                 ..Default::default()
             }),
-            MenuItem::Standard(StandardItem {
-                label: fl!("tray-hide"),
-                icon_name: "window-close-symbolic".to_owned(),
-                activate: Box::new(|item: &mut Self| item.send(Command::Hide)),
-                ..Default::default()
-            }),
-            MenuItem::Separator,
             MenuItem::Standard(StandardItem {
                 label: fl!("run-now"),
                 icon_name: "system-software-update-symbolic".to_owned(),

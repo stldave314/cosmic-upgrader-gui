@@ -193,8 +193,6 @@ first-run-tray-description = Lets you hide the window and bring it back, and sta
 first-run-accept = Continue
 autostart = Start with the desktop session
 autostart-description = Adds an entry to ~/.config/autostart
-minimize-to-tray = Hide to the status area instead of quitting
-minimize-to-tray-description = Adds a Hide button. The window manager's close button still quits.
 show-tray-icon = Show an icon in the status area
 
 ## Category settings and custom commands
@@ -209,9 +207,7 @@ custom-commands-description = Commands you name yourself. topgrade runs them as 
 ## Status area
 
 tray-show = Show window
-tray-hide = Hide window
 tray-quit = Quit
-hide-to-tray = Hide to the status area
 tray-unavailable = No status area was found on this desktop, so no icon is shown.
 
 ## Releases
@@ -340,3 +336,6 @@ sources-suite-placeholder = Suite (e.g. stable)
 sources-flatpak-hint = A Flatpak remote is added for you alone and needs no password. Point it at a .flatpakrepo URL.
 sources-apt-hint = An APT source is written to /etc/apt/sources.list.d and needs administrator rights.
 sources-changing = Applying…
+show-tray-icon-description = Raises the window, starts an upgrade without opening it, and quits. It cannot hide the window — Wayland gives no way to undo that.
+welcome-show-again = Set-up screen
+welcome-show-again-description = Go back to the first screen and its choices.
