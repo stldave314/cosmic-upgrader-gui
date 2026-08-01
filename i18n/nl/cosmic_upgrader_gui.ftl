@@ -304,3 +304,25 @@ welcome-finish = Klaar
 welcome-heading = Opwaarderingen instellen
 welcome-notifications = Meldingen
 welcome-root-warning = Onbeheerd installeren vereist beheerdersrechten, dus de geplande uitvoering wordt geïnstalleerd als systeemdienst die als root draait. Niets anders in deze toepassing draait als root.
+
+## Package sources
+
+nav-sources = Pakketbronnen
+sources-add-apt = APT-bron toevoegen
+sources-add-flatpak = Flatpak-bron toevoegen
+sources-add-heading = Een bron toevoegen
+sources-apt-hint = Een APT-bron wordt naar /etc/apt/sources.list.d geschreven en vereist beheerdersrechten.
+sources-changing = Bezig met toepassen…
+sources-description = De repository's waaruit uw pakketbeheerders halen. topgrade werkt bij wat geïnstalleerd is; deze bepalen wat er beschikbaar is.
+sources-disable-note = APT- en dnf-bronnen worden uitgeschakeld in plaats van verwijderd, zodat een wijziging met de hand ongedaan kan worden gemaakt.
+sources-disabled = Uitgeschakeld
+sources-enabled = Ingeschakeld
+sources-flatpak-hint = Een Flatpak-bron wordt alleen voor u toegevoegd en vereist geen wachtwoord. Verwijs naar een .flatpakrepo-URL.
+sources-heading = Waar pakketten vandaan komen
+sources-name-placeholder = Naam
+sources-none = Er zijn geen pakketbronnen gevonden.
+sources-privileged = Dit wijzigen vereist beheerdersrechten.
+sources-reload = Herladen
+sources-remove = Verwijderen
+sources-suite-placeholder = Suite (bijv. stable)
+sources-url-placeholder = URL

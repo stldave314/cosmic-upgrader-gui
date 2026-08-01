@@ -304,3 +304,25 @@ welcome-finish = Fatto
 welcome-heading = Configura gli aggiornamenti
 welcome-notifications = Notifiche
 welcome-root-warning = L'installazione non presidiata richiede i permessi di amministratore, quindi l'esecuzione pianificata viene installata come servizio di sistema eseguito come root. Nient'altro in questa applicazione viene eseguito come root.
+
+## Package sources
+
+nav-sources = Sorgenti dei pacchetti
+sources-add-apt = Aggiungi sorgente APT
+sources-add-flatpak = Aggiungi remote Flatpak
+sources-add-heading = Aggiungi una sorgente
+sources-apt-hint = Una sorgente APT viene scritta in /etc/apt/sources.list.d e richiede i permessi di amministratore.
+sources-changing = Applicazione…
+sources-description = I repository da cui attingono i gestori di pacchetti. topgrade aggiorna ciò che è installato; questi decidono cosa è disponibile.
+sources-disable-note = Le sorgenti APT e dnf vengono disattivate anziché eliminate, così una modifica si può annullare a mano.
+sources-disabled = Disattivata
+sources-enabled = Attivata
+sources-flatpak-hint = Un remote Flatpak viene aggiunto solo per te e non richiede password. Indica un URL .flatpakrepo.
+sources-heading = Da dove arrivano i pacchetti
+sources-name-placeholder = Nome
+sources-none = Nessuna sorgente di pacchetti trovata.
+sources-privileged = Modificarla richiede i permessi di amministratore.
+sources-reload = Ricarica
+sources-remove = Rimuovi
+sources-suite-placeholder = Suite (es. stable)
+sources-url-placeholder = URL

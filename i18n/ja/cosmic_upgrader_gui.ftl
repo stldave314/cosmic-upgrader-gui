@@ -302,3 +302,25 @@ welcome-finish = 完了
 welcome-heading = 更新の設定
 welcome-notifications = 通知
 welcome-root-warning = 無人でのインストールには管理者権限が必要なため、予約実行は root で動作するシステムサービスとして設定されます。このアプリケーションの他の部分は root では動作しません。
+
+## Package sources
+
+nav-sources = パッケージの取得元
+sources-add-apt = APT ソースを追加
+sources-add-flatpak = Flatpak リモートを追加
+sources-add-heading = 取得元を追加
+sources-apt-hint = APT ソースは /etc/apt/sources.list.d に書き込まれ、管理者権限が必要です。
+sources-changing = 適用しています…
+sources-description = パッケージマネージャーが取得するリポジトリーです。topgrade は導入済みのものを更新し、これらは何が入手できるかを決めます。
+sources-disable-note = APT と dnf の取得元は削除ではなく無効化されるため、変更は手作業で元に戻せます。
+sources-disabled = 無効
+sources-enabled = 有効
+sources-flatpak-hint = Flatpak リモートはあなた専用に追加され、パスワードは不要です。.flatpakrepo の URL を指定してください。
+sources-heading = パッケージの取得元
+sources-name-placeholder = 名前
+sources-none = パッケージの取得元が見つかりませんでした。
+sources-privileged = 変更には管理者権限が必要です。
+sources-reload = 再読み込み
+sources-remove = 削除
+sources-suite-placeholder = スイート (例: stable)
+sources-url-placeholder = URL

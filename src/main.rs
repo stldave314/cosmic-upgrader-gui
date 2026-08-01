@@ -17,6 +17,7 @@ mod history;
 mod i18n;
 mod notify;
 mod releases;
+mod repos;
 mod tray;
 mod schedule;
 mod topgrade;

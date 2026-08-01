@@ -68,6 +68,8 @@ pub const RELEASES: &str = "rel";
 pub const DEPS: &str = "deps";
 /// Virus database changes and the scans that follow them.
 pub const CLAMAV: &str = "clam";
+/// Reading and changing where packages come from.
+pub const REPOS: &str = "repos";
 
 /// Process start, so each line can be stamped with elapsed time rather than a
 /// wall clock the reader has to subtract by hand.

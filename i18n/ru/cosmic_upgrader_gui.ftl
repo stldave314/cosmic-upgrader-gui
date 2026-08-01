@@ -308,3 +308,25 @@ welcome-finish = Готово
 welcome-heading = Настройка обновлений
 welcome-notifications = Уведомления
 welcome-root-warning = Установка без присмотра требует прав администратора, поэтому запуск по расписанию устанавливается как системная служба, работающая от root. Ничто другое в этом приложении от root не работает.
+
+## Package sources
+
+nav-sources = Источники пакетов
+sources-add-apt = Добавить источник APT
+sources-add-flatpak = Добавить репозиторий Flatpak
+sources-add-heading = Добавить источник
+sources-apt-hint = Источник APT записывается в /etc/apt/sources.list.d и требует прав администратора.
+sources-changing = Применение…
+sources-description = Репозитории, из которых берут ваши менеджеры пакетов. topgrade обновляет установленное; эти определяют, что вообще доступно.
+sources-disable-note = Источники APT и dnf выключаются, а не удаляются, чтобы изменение можно было отменить вручную.
+sources-disabled = Выключен
+sources-enabled = Включён
+sources-flatpak-hint = Репозиторий Flatpak добавляется только для вас и не требует пароля. Укажите адрес .flatpakrepo.
+sources-heading = Откуда берутся пакеты
+sources-name-placeholder = Название
+sources-none = Источники пакетов не найдены.
+sources-privileged = Изменение требует прав администратора.
+sources-reload = Обновить
+sources-remove = Удалить
+sources-suite-placeholder = Выпуск (например, stable)
+sources-url-placeholder = Адрес

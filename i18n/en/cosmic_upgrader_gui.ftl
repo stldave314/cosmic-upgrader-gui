@@ -318,3 +318,25 @@ clamav-scanning = Virus database changed — scanning…
 clamav-clean = Scan finished: { $scanned } files checked, nothing found.
 clamav-infected = Scan finished: { $infected } infected file(s) found.
 clamav-failed = The scan could not run: { $message }
+
+## Package sources
+
+nav-sources = Package sources
+sources-heading = Where packages come from
+sources-description = The repositories your package managers pull from. topgrade upgrades what is installed; these decide what is available in the first place.
+sources-none = No package sources were found.
+sources-reload = Reload
+sources-enabled = Enabled
+sources-disabled = Disabled
+sources-privileged = Changing this needs administrator rights.
+sources-remove = Remove
+sources-disable-note = APT and dnf sources are turned off rather than deleted, so a change can be undone by hand.
+sources-add-heading = Add a source
+sources-add-apt = Add APT source
+sources-add-flatpak = Add Flatpak remote
+sources-name-placeholder = Name
+sources-url-placeholder = URL
+sources-suite-placeholder = Suite (e.g. stable)
+sources-flatpak-hint = A Flatpak remote is added for you alone and needs no password. Point it at a .flatpakrepo URL.
+sources-apt-hint = An APT source is written to /etc/apt/sources.list.d and needs administrator rights.
+sources-changing = Applying…

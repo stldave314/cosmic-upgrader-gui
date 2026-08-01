@@ -23,6 +23,7 @@ use crate::debug_log;
 use crate::fl;
 use crate::history::{self, Origin, Outcome as RunOutcome, Recorder};
 use crate::dependencies::{self, Report, Requirement};
+use crate::repos::{self, Repository};
 use crate::releases::{
     self, detect::Candidate, Channel, CheckInterval, Status as ReleaseStatus, Watch,
 };
@@ -78,6 +79,9 @@ pub enum Page {
     Steps(Category),
     Run,
     Releases,
+    /// Where packages come from — deliberately not called "Repositories", which
+    /// in this application already means the git repositories topgrade pulls.
+    Sources,
     History,
     Dependencies,
     Schedule,
@@ -206,6 +210,13 @@ pub enum Message {
     AddDirectory,
     DraftDirectory(String),
     RemoveDirectory(String),
+    LoadSources,
+    SourcesLoaded(Vec<Repository>),
+    ToggleSource(String, bool),
+    RemoveSource(String),
+    AddSource(repos::Kind),
+    DraftSource(usize, String),
+    SourceChanged(Box<Result<(), String>>),
     RecheckDependencies,
     InstallDependency(String),
     DependencyInstalled(Box<Result<String, (String, String)>>),
@@ -294,6 +305,12 @@ struct Ready {
     installing_dep: Option<String>,
     /// Half-typed directory to add to the search list.
     directory_draft: String,
+    /// Where packages come from, as last read.
+    sources: Vec<Repository>,
+    /// Half-typed new source: name, then URL, then suite.
+    source_draft: (String, String, String),
+    /// The source currently being changed, so its row can say so.
+    changing_source: Option<String>,
 }
 
 /// A run in progress or just finished.
@@ -431,6 +448,11 @@ impl App {
                 fl!("nav-releases"),
                 "folder-download-symbolic",
                 Page::Releases,
+            ),
+            (
+                fl!("nav-sources"),
+                "network-workgroup-symbolic",
+                Page::Sources,
             ),
             (
                 fl!("nav-history"),
@@ -795,6 +817,13 @@ impl Application for App {
 
     fn on_nav_select(&mut self, id: nav_bar::Id) -> Task<Message> {
         self.nav.activate(id);
+        // Read when the page is first opened rather than at startup: it walks a
+        // directory and runs flatpak, and most sessions never look at it.
+        if self.page() == Page::Sources
+            && self.ready().is_some_and(|ready| ready.sources.is_empty())
+        {
+            return cosmic::task::message(Message::LoadSources);
+        }
         Task::none()
     }
 
@@ -927,6 +956,9 @@ impl Application for App {
                             deps: dependencies::check(),
                             installing_dep: None,
                             directory_draft: String::new(),
+                            sources: Vec::new(),
+                            source_draft: (String::new(), String::new(), String::new()),
+                            changing_source: None,
                         }));
                         self.rebuild_nav();
 
@@ -2013,6 +2045,105 @@ impl Application for App {
                 Task::none()
             }
 
+            Message::LoadSources => cosmic::task::future(async move {
+                Message::SourcesLoaded(repos::list().await)
+            }),
+
+            Message::SourcesLoaded(sources) => {
+                if let Some(ready) = self.ready_mut() {
+                    ready.sources = sources;
+                    ready.changing_source = None;
+                }
+                Task::none()
+            }
+
+            Message::DraftSource(field, text) => {
+                if let Some(ready) = self.ready_mut() {
+                    match field {
+                        0 => ready.source_draft.0 = text,
+                        1 => ready.source_draft.1 = text,
+                        _ => ready.source_draft.2 = text,
+                    }
+                }
+                Task::none()
+            }
+
+            Message::ToggleSource(name, enabled) => {
+                let Some(ready) = self.ready_mut() else {
+                    return Task::none();
+                };
+                let Some(repository) = ready
+                    .sources
+                    .iter()
+                    .find(|source| source.name == name)
+                    .cloned()
+                else {
+                    return Task::none();
+                };
+                ready.changing_source = Some(name);
+
+                cosmic::task::future(async move {
+                    let result = repos::set_enabled(&repository, enabled)
+                        .await
+                        .map_err(|error| error.to_string());
+                    Message::SourceChanged(Box::new(result))
+                })
+            }
+
+            Message::RemoveSource(name) => {
+                let Some(ready) = self.ready_mut() else {
+                    return Task::none();
+                };
+                let Some(repository) = ready
+                    .sources
+                    .iter()
+                    .find(|source| source.name == name)
+                    .cloned()
+                else {
+                    return Task::none();
+                };
+                ready.changing_source = Some(name);
+
+                cosmic::task::future(async move {
+                    let result = repos::remove(&repository)
+                        .await
+                        .map_err(|error| error.to_string());
+                    Message::SourceChanged(Box::new(result))
+                })
+            }
+
+            Message::AddSource(kind) => {
+                let Some(ready) = self.ready() else {
+                    return Task::none();
+                };
+                let (name, url, suite) = ready.source_draft.clone();
+                if let Some(ready) = self.ready_mut() {
+                    ready.source_draft = (String::new(), String::new(), String::new());
+                }
+
+                cosmic::task::future(async move {
+                    let result = repos::add(kind, &name, &url, &suite)
+                        .await
+                        .map_err(|error| error.to_string());
+                    Message::SourceChanged(Box::new(result))
+                })
+            }
+
+            Message::SourceChanged(result) => {
+                if let Some(ready) = self.ready_mut() {
+                    ready.changing_source = None;
+                    if let Err(message) = *result {
+                        ready.status = Some(message);
+                    } else {
+                        ready.status = None;
+                    }
+                }
+                // Re-read rather than assuming: the file on disk is the truth,
+                // and a change that was authenticated away should show as not
+                // having happened.
+                cosmic::task::message(Message::LoadSources)
+            }
+
             Message::RecheckDependencies => {
                 if let Some(ready) = self.ready_mut() {
                     ready.deps = dependencies::check();
@@ -2078,6 +2209,7 @@ impl Application for App {
                 Page::Steps(category) => self.view_steps(ready, category),
                 Page::Run => self.view_run(),
                 Page::Releases => self.view_releases(ready),
+                Page::Sources => self.view_sources(ready),
                 Page::History => self.view_history(ready),
                 Page::Dependencies => self.view_dependencies(ready),
                 Page::Schedule => self.view_schedule(ready),
@@ -2952,6 +3084,141 @@ impl App {
         // the settings that govern them rather than below a screenful of
         // controls.
         widget::scrollable(column.push(section).push(settings)).into()
+    }
+
+    /// Where packages come from, and the controls for changing that.
+    fn view_sources<'a>(&'a self, ready: &'a Ready) -> Element<'a, Message> {
+        let mut column = widget::column::with_children(Vec::new())
+            .spacing(12)
+            .push(widget::text::title2(fl!("sources-heading")))
+            .push(widget::text::body(fl!("sources-description")))
+            .push(
+                widget::row::with_children(Vec::new()).spacing(8).push(
+                    widget::button::standard(fl!("sources-reload"))
+                        .on_press(Message::LoadSources),
+                ),
+            );
+
+        if let Some(status) = &ready.status {
+            column = column.push(widget::text::caption(status.clone()));
+        }
+
+        if ready.sources.is_empty() {
+            column = column.push(widget::text::body(fl!("sources-none")));
+        }
+
+        // Grouped by package manager, which is how somebody thinks about them:
+        // "my Flatpak remotes" is a question, "all my repositories" rarely is.
+        for kind in [repos::Kind::Apt, repos::Kind::Flatpak, repos::Kind::Dnf] {
+            let listed: Vec<&Repository> = ready
+                .sources
+                .iter()
+                .filter(|source| source.kind == kind)
+                .collect();
+            if listed.is_empty() {
+                continue;
+            }
+
+            let mut section = widget::settings::section().title(kind.label());
+            if kind != repos::Kind::Flatpak {
+                section = section.add(widget::text::caption(fl!("sources-disable-note")));
+            }
+
+            for source in listed {
+                let name = source.name.clone();
+                let remove_name = source.name.clone();
+                let busy = ready.changing_source.as_deref() == Some(source.name.as_str());
+
+                let mut controls = widget::row::with_children(Vec::new())
+                    .spacing(8)
+                    .align_y(Alignment::Center);
+
+                if busy {
+                    controls = controls.push(widget::text::caption(fl!("sources-changing")));
+                }
+
+                controls = controls
+                    .push(
+                        widget::toggler(source.enabled)
+                            .on_toggle(move |value| Message::ToggleSource(name.clone(), value)),
+                    )
+                    .push(
+                        widget::button::icon(widget::icon::from_name("list-remove-symbolic"))
+                            .on_press(Message::RemoveSource(remove_name)),
+                    );
+
+                let mut description = source.detail.clone();
+                if source.privileged {
+                    description.push_str(&format!("\n{}", fl!("sources-privileged")));
+                }
+
+                section = section.add(
+                    widget::settings::item::builder(source.name.clone())
+                        .description(description)
+                        .icon(widget::icon::from_name(if source.enabled {
+                            "emblem-ok-symbolic"
+                        } else {
+                            "window-close-symbolic"
+                        }))
+                        .control(controls),
+                );
+            }
+
+            column = column.push(section);
+        }
+
+        let (name, url, suite) = &ready.source_draft;
+        let can_add = !name.trim().is_empty() && !url.trim().is_empty();
+
+        column = column.push(
+            widget::settings::section()
+                .title(fl!("sources-add-heading"))
+                .add(widget::text::caption(fl!("sources-flatpak-hint")))
+                .add(widget::text::caption(fl!("sources-apt-hint")))
+                .add(
+                    widget::settings::item::builder(fl!("sources-name-placeholder")).control(
+                        widget::text_input(fl!("sources-name-placeholder"), name.clone())
+                            .on_input(|text| Message::DraftSource(0, text))
+                            .width(Length::Fixed(260.0)),
+                    ),
+                )
+                .add(
+                    widget::settings::item::builder(fl!("sources-url-placeholder")).control(
+                        widget::text_input(fl!("sources-url-placeholder"), url.clone())
+                            .on_input(|text| Message::DraftSource(1, text))
+                            .width(Length::Fixed(260.0)),
+                    ),
+                )
+                .add(
+                    widget::settings::item::builder(fl!("sources-suite-placeholder")).control(
+                        widget::text_input(fl!("sources-suite-placeholder"), suite.clone())
+                            .on_input(|text| Message::DraftSource(2, text))
+                            .width(Length::Fixed(260.0)),
+                    ),
+                )
+                .add(
+                    widget::settings::item::builder(String::new()).control(
+                        widget::row::with_children(Vec::new())
+                            .spacing(8)
+                            .push(
+                                widget::button::suggested(fl!("sources-add-flatpak"))
+                                    .on_press_maybe(
+                                        can_add.then_some(Message::AddSource(
+                                            repos::Kind::Flatpak,
+                                        )),
+                                    ),
+                            )
+                            .push(
+                                widget::button::standard(fl!("sources-add-apt")).on_press_maybe(
+                                    (can_add && !suite.trim().is_empty())
+                                        .then_some(Message::AddSource(repos::Kind::Apt)),
+                                ),
+                            ),
+                    ),
+                ),
+        );
+
+        widget::scrollable(column).into()
     }
 
     /// Past runs, or the transcript of one of them.

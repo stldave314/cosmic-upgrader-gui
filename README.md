@@ -108,6 +108,8 @@ than by hunting down a long configuration page.
 - **A dependency check** saying what each tool it drives is for, whether it is
   required, and whether you have it.
 - **A virus scan after the ClamAV database changes**, if you want one.
+- **Package sources** — the APT, Flatpak and dnf repositories themselves, listed
+  and switchable in one place.
 
 ## Release tracking
 
@@ -243,6 +245,46 @@ your credentials and gets 5000 requests an hour where an unauthenticated client
 gets 60 — a watch list of any size exhausts that immediately. Both are detected
 rather than assumed; if neither is present the page says so once instead of
 every row reporting the same failure.
+
+## Package sources
+
+topgrade upgrades what is installed; it has nothing to say about where those
+packages come from. Adding a PPA, turning off a third-party source that has
+started breaking `apt update`, or adding a Flatpak remote all mean editing files
+under `/etc` or remembering a command.
+
+![The package sources page](docs/sources.png)
+
+Both APT formats are read — the classic one-line `.list` entries and the deb822
+`.sources` stanzas replacing them — because a current system has both. On the
+machine this was developed against: 18 APT sources across both formats, plus 5
+Flatpak remotes.
+
+**Reading is safe; writing is not.** A malformed sources file does not degrade
+gracefully — `apt update` fails outright and every upgrade path on the system
+stops working, which for an application whose whole job is upgrades would be a
+spectacular own goal. So:
+
+- **Disabled rather than deleted.** Commenting a line out is reversible with a
+  text editor; deleting a file another package installed is not something to do
+  on one click. Flatpak remotes *are* removed, because `flatpak remote-add` puts
+  them back.
+- **A deb822 stanza is changed by setting one field.** Everything else — including
+  an inline PGP key running to dozens of lines — is copied through untouched,
+  because rewriting a key is a good way to lose one. The `Enabled:` field goes at
+  the *top* of the stanza, since appended at the bottom it would be read as a
+  continuation of that key.
+- **Backups are not repositories.** `.save`, `.distUpgrade` and `.bak` files exist
+  because something already edited these files; offering them for editing would
+  be offering to edit a backup. This machine has a `.save` beside almost every
+  list.
+- **Writes go one file at a time through `pkexec`**, staged in your own directory
+  and installed atomically. A repository name is validated before it becomes a
+  filename under `/etc`.
+
+Flatpak remotes belonging to you need no password at all, and the same remote can
+exist in both user and system scope — they are genuinely different things, so
+they are listed separately rather than collapsed into one row.
 
 ## Notifications
 

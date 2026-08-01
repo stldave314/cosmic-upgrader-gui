@@ -302,3 +302,25 @@ welcome-finish = 完成
 welcome-heading = 设置升级
 welcome-notifications = 通知
 welcome-root-warning = 无人值守安装需要管理员权限，因此计划运行将作为以 root 身份运行的系统服务安装。此应用程序的其他部分都不会以 root 运行。
+
+## Package sources
+
+nav-sources = 软件包来源
+sources-add-apt = 添加 APT 源
+sources-add-flatpak = 添加 Flatpak 远程
+sources-add-heading = 添加来源
+sources-apt-hint = APT 源会写入 /etc/apt/sources.list.d，需要管理员权限。
+sources-changing = 正在应用…
+sources-description = 您的包管理器拉取的仓库。topgrade 升级已安装的内容；这些决定有什么可用。
+sources-disable-note = APT 和 dnf 来源是被停用而非删除的，因此更改可以手工撤销。
+sources-disabled = 已停用
+sources-enabled = 已启用
+sources-flatpak-hint = Flatpak 远程仅为您添加，无需密码。请指向 .flatpakrepo 网址。
+sources-heading = 软件包来自哪里
+sources-name-placeholder = 名称
+sources-none = 未找到软件包来源。
+sources-privileged = 更改此项需要管理员权限。
+sources-reload = 重新加载
+sources-remove = 移除
+sources-suite-placeholder = 套件（例如 stable）
+sources-url-placeholder = 网址
