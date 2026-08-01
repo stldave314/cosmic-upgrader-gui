@@ -1,6 +1,6 @@
 [package]
 name = "cosmic-upgrader-gui"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2021"
 license = "GPL-3.0"
 description = "A COSMIC Desktop front-end for topgrade — configure, schedule and run system-wide upgrades"
@@ -93,6 +93,7 @@ assets = [
     ["resources/app.desktop", "usr/share/applications/com.github.cosmic_upgrader_gui.desktop", "644"],
     ["resources/app.metainfo.xml", "usr/share/metainfo/com.github.cosmic_upgrader_gui.metainfo.xml", "644"],
     ["resources/icon.svg", "usr/share/icons/hicolor/scalable/apps/com.github.cosmic_upgrader_gui.svg", "644"],
+    ["resources/icon-symbolic.svg", "usr/share/icons/hicolor/symbolic/apps/com.github.cosmic_upgrader_gui-symbolic.svg", "644"],
 ]
 
 # .rpm via `cargo generate-rpm` (cargo-generate-rpm). Requires a prior release
@@ -103,4 +104,5 @@ assets = [
     { source = "resources/app.desktop", dest = "/usr/share/applications/com.github.cosmic_upgrader_gui.desktop", mode = "644" },
     { source = "resources/app.metainfo.xml", dest = "/usr/share/metainfo/com.github.cosmic_upgrader_gui.metainfo.xml", mode = "644" },
     { source = "resources/icon.svg", dest = "/usr/share/icons/hicolor/scalable/apps/com.github.cosmic_upgrader_gui.svg", mode = "644" },
+    { source = "resources/icon-symbolic.svg", dest = "/usr/share/icons/hicolor/symbolic/apps/com.github.cosmic_upgrader_gui-symbolic.svg", mode = "644" },
 ]

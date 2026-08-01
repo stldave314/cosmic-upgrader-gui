@@ -186,7 +186,9 @@ install_files() {
     install -Dm755 "target/release/$BIN"        "${DESTDIR}${PREFIX}/bin/$BIN"
     install -Dm644 resources/app.desktop        "${DESTDIR}${PREFIX}/share/applications/${APP_ID}.desktop"
     install -Dm644 resources/app.metainfo.xml   "${DESTDIR}${PREFIX}/share/metainfo/${APP_ID}.metainfo.xml"
-    install -Dm644 resources/icon.svg           "${DESTDIR}${PREFIX}/share/icons/hicolor/scalable/apps/${APP_ID}.svg"
+    install -Dm644 resources/icon.svg           "${DESTDIR}${PREFIX}/share/icons/hicolor/scalable/apps/${APP_ID}.svg" \
+          "${DESTDIR}${PREFIX}/share/icons/hicolor/symbolic/apps/${APP_ID}-symbolic.svg"
+    install -Dm644 resources/icon-symbolic.svg  "${DESTDIR}${PREFIX}/share/icons/hicolor/symbolic/apps/${APP_ID}-symbolic.svg"
 
     if [ "${BUNDLE_TOPGRADE:-0}" = "1" ]; then
         install -Dm755 target/bundled/bin/topgrade \
@@ -211,7 +213,8 @@ uninstall_files() {
     rm -f "${DESTDIR}${PREFIX}/bin/$BIN" \
           "${DESTDIR}${PREFIX}/share/applications/${APP_ID}.desktop" \
           "${DESTDIR}${PREFIX}/share/metainfo/${APP_ID}.metainfo.xml" \
-          "${DESTDIR}${PREFIX}/share/icons/hicolor/scalable/apps/${APP_ID}.svg"
+          "${DESTDIR}${PREFIX}/share/icons/hicolor/scalable/apps/${APP_ID}.svg" \
+          "${DESTDIR}${PREFIX}/share/icons/hicolor/symbolic/apps/${APP_ID}-symbolic.svg"
     rm -rf "${DESTDIR}${PREFIX}/libexec/$BIN"
 
     if [ -z "$DESTDIR" ]; then
@@ -256,6 +259,7 @@ tarball() {
     install -Dm644 resources/app.desktop      "$stage/share/applications/${APP_ID}.desktop"
     install -Dm644 resources/app.metainfo.xml "$stage/share/metainfo/${APP_ID}.metainfo.xml"
     install -Dm644 resources/icon.svg         "$stage/share/icons/hicolor/scalable/apps/${APP_ID}.svg"
+    install -Dm644 resources/icon-symbolic.svg "$stage/share/icons/hicolor/symbolic/apps/${APP_ID}-symbolic.svg"
     install -Dm644 README.md LICENSE          "$stage/"
 
     if [ "${BUNDLE_TOPGRADE:-0}" = "1" ]; then

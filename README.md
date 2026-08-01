@@ -156,6 +156,29 @@ The path to re-run is captured at startup rather than when needed: once the file
 has been replaced, `/proc/self/exe` names a deleted inode and is no longer
 something that can be run.
 
+### What topgrade already covers, and what it does not
+
+A fair question is why this exists at all when topgrade has eight steps for
+software installed from release pages — `install_release`, `deb_get`, `am`,
+`app_man`, `gearlever`, `soar`, `bin` and `stew`.
+
+The answer is that every one of them only updates what was installed *through
+that tool*. Install with `deb-get` and topgrade keeps it current. Download a
+`.deb` from a releases page and `apt install ./file.deb` — which is what most
+people actually do — and no tool has any record of it. That is the gap, and it
+is exactly the set `apt-cache policy` identifies.
+
+So **Run upgrade applies these too**, after topgrade has finished, one at a time
+so the authentication prompts do not stack. It skips this application itself,
+since updating that restarts the process and would abandon the rest of the
+queue. Turn it off under Behaviour if you would rather apply them by hand.
+
+### Noticing new ones
+
+Install something by hand and it is found on the next launch, with an offer to
+watch it. Turning the offer down is remembered, because a prompt that returns
+every launch is one people learn to dismiss without reading.
+
 ### Where the projects come from
 
 Nothing is guessed at from the network. Candidates are derived from what the
@@ -423,7 +446,10 @@ in a control that would rewrite it.
 
 **The status area** icon is a freedesktop StatusNotifierItem, which is what
 COSMIC's `cosmic-applet-status-area` implements. It raises the window, starts an
-upgrade without opening it, and quits.
+upgrade without opening it, and quits. The icon is monochrome, as the panel's
+others are — it is a separate 16-pixel drawing rather than the application icon
+scaled down, because the application icon's ring and arrow collide into an
+unreadable blob at that size.
 
 It deliberately does **not** hide the window, because on this stack that cannot
 be made to work and half of it working is worse than none. Three routes were

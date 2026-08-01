@@ -258,12 +258,20 @@ pub enum Message {
     ConfigPrivilege(PrivilegeMode),
     ConfigConfirmBeforeRunning(bool),
     ConfigAssumeYes(bool),
+    ConfigUpgradeReleasesWithRun(bool),
     ConfigShowUnavailable(bool),
     ConfigCheckInterval(usize),
     ConfigChannel(usize),
     AddDirectory,
     DraftDirectory(String),
     RemoveDirectory(String),
+    /// Look for anything installed since last time that nothing will update.
+    ScanForNewProjects,
+    NewProjectsFound(Vec<Candidate>),
+    WatchFound,
+    DismissFound,
+    /// Work through the release updates an upgrade run should apply.
+    ApplyPendingUpdates,
     LoadSources,
     SourcesLoaded(Vec<Repository>),
     ToggleSource(String, bool),
@@ -353,6 +361,11 @@ struct Ready {
     checking: Option<(usize, usize)>,
     /// The project currently being downloaded and installed.
     installing: Option<String>,
+    /// Projects found on this system that are not watched and have not been
+    /// turned down, so the offer to watch them can be made once.
+    unwatched: Vec<Candidate>,
+    /// Release updates still to apply as part of the current run.
+    pending_updates: Vec<String>,
     /// What was found when the tools this application drives were last checked.
     deps: Vec<Report>,
     /// The dependency currently being installed.
@@ -635,6 +648,45 @@ impl App {
             });
             Message::TrayStarted(handles)
         })
+    }
+
+    /// Queue the release updates an upgrade run should apply.
+    ///
+    /// topgrade covers software installed *through* a tool that tracks releases;
+    /// it has no way to update a package somebody downloaded and installed by
+    /// hand. Those are what this picks up, so one "Run upgrade" means what it
+    /// says rather than most of it.
+    fn queue_release_updates(&mut self) -> Task<Message> {
+        if !self.config.upgrade_releases_with_run {
+            return Task::none();
+        }
+        // A preview changes nothing, so it does not install anything either.
+        if self.run.as_ref().is_some_and(|run| run.dry_run) {
+            return Task::none();
+        }
+
+        let Some(ready) = self.ready() else {
+            return Task::none();
+        };
+        let queued: Vec<String> = ready
+            .statuses
+            .iter()
+            .filter(|(_, status)| status.is_update())
+            // Not this application: updating itself restarts the process, which
+            // would abandon the rest of the queue.
+            .filter(|(key, _)| Some(key.as_str()) != releases::self_key().as_deref())
+            .map(|(key, _)| key.clone())
+            .collect();
+
+        if queued.is_empty() {
+            return Task::none();
+        }
+        debug_log!(UI, "{} release update(s) to apply after the run", queued.len());
+
+        if let Some(ready) = self.ready_mut() {
+            ready.pending_updates = queued;
+        }
+        cosmic::task::message(Message::ApplyPendingUpdates)
     }
 
     /// Start a virus scan if the run changed the signature database.
@@ -998,6 +1050,8 @@ impl Application for App {
                             statuses: HashMap::new(),
                             checking: None,
                             installing: None,
+                            unwatched: Vec::new(),
+                            pending_updates: Vec::new(),
                             deps: dependencies::check(),
                             installing_dep: None,
                             directory_draft: String::new(),
@@ -1023,7 +1077,14 @@ impl Application for App {
                             Task::none()
                         };
 
-                        return Task::batch([scan, check]);
+                        // Looked for after the scan rather than alongside it:
+                        // it reads the package database and runs apt-cache, and
+                        // the steps matter more at startup.
+                        return Task::batch([
+                            scan,
+                            check,
+                            cosmic::task::message(Message::ScanForNewProjects),
+                        ]);
                     }
                     Err(error) => self.state = State::Unusable(error),
                 }
@@ -1214,7 +1275,8 @@ impl Application for App {
                             run.outcome = Some(outcome);
                         }
                         let scan = self.scan_if_database_changed();
-                        return Task::batch([self.tray_running(false), scan]);
+                        let releases = self.queue_release_updates();
+                        return Task::batch([self.tray_running(false), scan, releases]);
                     }
                 }
 
@@ -1497,6 +1559,12 @@ impl Application for App {
                 Task::none()
             }
 
+            Message::ConfigUpgradeReleasesWithRun(value) => {
+                self.config.upgrade_releases_with_run = value;
+                self.save_config();
+                Task::none()
+            }
+
             Message::ConfigShowUnavailable(value) => {
                 self.config.show_unavailable_steps = value;
                 self.save_config();
@@ -1761,6 +1829,21 @@ impl Application for App {
                         // The recorded version moves forward so the entry stops
                         // reporting an update it has already applied.
                         if let Some(key) = key {
+                            // The result of the last check said an update was
+                            // available, and it still says so — it was taken
+                            // before the install. Left in place it would keep
+                            // offering an update that has already happened,
+                            // because a live result is preferred over the
+                            // recorded version. Dropping it falls back to
+                            // comparing what is now installed against the tag,
+                            // which agree.
+                            if let Some(ready) = match &mut self.state {
+                                State::Ready(ready) => Some(ready),
+                                _ => None,
+                            } {
+                                ready.statuses.remove(&key);
+                            }
+
                             if let Some(watch) = self
                                 .config
                                 .watches
@@ -1797,6 +1880,14 @@ impl Application for App {
                     if !busy {
                         return cosmic::task::message(Message::RestartUpdated);
                     }
+                }
+
+                // Keep working through anything a run queued up.
+                let more = self
+                    .ready()
+                    .is_some_and(|ready| !ready.pending_updates.is_empty());
+                if more {
+                    return cosmic::task::message(Message::ApplyPendingUpdates);
                 }
                 Task::none()
             }
@@ -2140,6 +2231,83 @@ impl Application for App {
                 self.config.appimage_dirs.retain(|entry| *entry != directory);
                 self.save_config();
                 Task::none()
+            }
+
+            Message::ScanForNewProjects => {
+                let directories = self.config.appimage_dirs.clone();
+                cosmic::task::future(async move {
+                    Message::NewProjectsFound(releases::discover(&directories).await)
+                })
+            }
+
+            Message::NewProjectsFound(found) => {
+                let known: HashSet<String> = self
+                    .config
+                    .watches
+                    .iter()
+                    .map(|watch| format!("{}/{}", watch.host, watch.path))
+                    .chain(self.config.dismissed_candidates.iter().cloned())
+                    .collect();
+
+                if let Some(ready) = self.ready_mut() {
+                    ready.unwatched = found
+                        .into_iter()
+                        .filter(|candidate| {
+                            candidate.repo.as_ref().is_some_and(|repo| {
+                                !known.contains(&format!("{}/{}", repo.host, repo.path))
+                            })
+                        })
+                        .collect();
+                    if !ready.unwatched.is_empty() {
+                        debug_log!(UI, "{} new project(s) worth watching", ready.unwatched.len());
+                    }
+                }
+                Task::none()
+            }
+
+            Message::WatchFound => {
+                let Some(ready) = self.ready_mut() else {
+                    return Task::none();
+                };
+                let found = std::mem::take(&mut ready.unwatched);
+                self.config.watches.extend(
+                    found
+                        .iter()
+                        .filter_map(Watch::from_candidate),
+                );
+                self.config
+                    .watches
+                    .sort_by_key(|watch| watch.name.to_lowercase());
+                self.save_config();
+                cosmic::task::message(Message::CheckReleases)
+            }
+
+            Message::DismissFound => {
+                let Some(ready) = self.ready_mut() else {
+                    return Task::none();
+                };
+                let found = std::mem::take(&mut ready.unwatched);
+                // Remembered so the same offer is not made on every launch.
+                self.config.dismissed_candidates.extend(
+                    found
+                        .iter()
+                        .filter_map(|candidate| candidate.repo.as_ref())
+                        .map(|repo| format!("{}/{}", repo.host, repo.path)),
+                );
+                self.save_config();
+                Task::none()
+            }
+
+            Message::ApplyPendingUpdates => {
+                let Some(ready) = self.ready_mut() else {
+                    return Task::none();
+                };
+                // One at a time: each is a download and an authentication
+                // prompt, and several at once would stack dialogs.
+                let Some(next) = ready.pending_updates.pop() else {
+                    return Task::none();
+                };
+                cosmic::task::message(Message::InstallRelease(next))
             }
 
             Message::LoadSources => cosmic::task::future(async move {
@@ -3057,6 +3225,45 @@ impl App {
             );
         }
 
+        // Something turned up that nothing else will update. Offered once —
+        // turning it down is remembered — because a prompt that returns on every
+        // launch is one people learn to dismiss without reading.
+        if !ready.unwatched.is_empty() {
+            let names: Vec<&str> = ready
+                .unwatched
+                .iter()
+                .take(3)
+                .map(|candidate| candidate.name.as_str())
+                .collect();
+            let mut listed = names.join(", ");
+            if ready.unwatched.len() > names.len() {
+                listed.push_str(&format!(" (+{})", ready.unwatched.len() - names.len()));
+            }
+
+            column = column.push(
+                widget::settings::section().add(
+                    widget::settings::item::builder(fl!(
+                        "releases-found-new",
+                        count = ready.unwatched.len()
+                    ))
+                    .description(format!("{listed}\n{}", fl!("releases-found-new-why")))
+                    .icon(widget::icon::from_name("dialog-information-symbolic"))
+                    .control(
+                        widget::row::with_children(Vec::new())
+                            .spacing(8)
+                            .push(
+                                widget::button::suggested(fl!("releases-found-watch"))
+                                    .on_press(Message::WatchFound),
+                            )
+                            .push(
+                                widget::button::standard(fl!("releases-found-dismiss"))
+                                    .on_press(Message::DismissFound),
+                            ),
+                    ),
+                ),
+            );
+        }
+
         // This application's own project is listed first and always, however it
         // was installed. It is synthesized rather than discovered, so building
         // from source — where there is no file to find and nothing in any
@@ -3792,6 +3999,14 @@ impl App {
                 .add(
                     widget::settings::item::builder(fl!("run-selected-only"))
                         .toggler(self.config.assume_yes, Message::ConfigAssumeYes),
+                )
+                .add(
+                    widget::settings::item::builder(fl!("upgrade-releases-with-run"))
+                        .description(fl!("upgrade-releases-with-run-description"))
+                        .toggler(
+                            self.config.upgrade_releases_with_run,
+                            Message::ConfigUpgradeReleasesWithRun,
+                        ),
                 )
                 .add(
                     widget::settings::item::builder(fl!("show-unavailable"))

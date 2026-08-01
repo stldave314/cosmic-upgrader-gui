@@ -32,6 +32,11 @@
   </developer>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.5.1" date="2026-07-31">
+      <description>
+        <p>fix: stale Update button, plus release updates in runs and a monochrome tray icon</p>
+      </description>
+    </release>
     <release version="0.5.0" date="2026-07-31">
       <description>
         <p>feat: restart into the new version, on the same page, after updating itself</p>

@@ -122,6 +122,17 @@ pub struct Config {
     pub first_run_completed: bool,
     /// How many past runs to keep transcripts for.
     pub keep_run_logs: usize,
+    /// Apply pending release updates as part of an upgrade run.
+    ///
+    /// topgrade has eight steps for software installed from a releases page —
+    /// `install_release`, `deb_get`, `am`, `app_man`, `gearlever`, `soar`, `bin`
+    /// and `stew` — but every one of them only updates what was installed
+    /// *through that tool*. A `.deb` downloaded from a releases page and
+    /// installed by hand is covered by none of them, which is what this is for.
+    pub upgrade_releases_with_run: bool,
+    /// Projects found but deliberately not watched, so the offer to watch them
+    /// is made once rather than on every launch.
+    pub dismissed_candidates: Vec<String>,
     /// Projects watched for new releases.
     ///
     /// Held here rather than re-detected each launch because it is a decision
@@ -164,6 +175,8 @@ impl Default for Config {
             show_tray_icon: false,
             first_run_completed: false,
             keep_run_logs: DEFAULT_KEEP_RUNS,
+            upgrade_releases_with_run: true,
+            dismissed_candidates: Vec::new(),
             watches: Vec::new(),
             release_check_interval: CheckInterval::default(),
             release_channel: Channel::default(),

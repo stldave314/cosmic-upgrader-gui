@@ -28,7 +28,7 @@
 
 use tokio::sync::mpsc;
 
-use crate::constants::{APP_ICON, APP_ID};
+use crate::constants::{APP_ICON_SYMBOLIC, APP_ID};
 use crate::debug::UI;
 use crate::debug_log;
 use crate::fl;
@@ -73,7 +73,7 @@ impl ksni::Tray for Item {
     }
 
     fn icon_name(&self) -> String {
-        APP_ICON.to_owned()
+        APP_ICON_SYMBOLIC.to_owned()
     }
 
     fn category(&self) -> ksni::Category {
@@ -90,7 +90,7 @@ impl ksni::Tray for Item {
             } else {
                 fl!("app-description")
             },
-            icon_name: APP_ICON.to_owned(),
+            icon_name: APP_ICON_SYMBOLIC.to_owned(),
             icon_pixmap: Vec::new(),
         }
     }

@@ -327,3 +327,12 @@ welcome-show-again-description = 回到第一个页面及其选项。
 releases-restart-failed = 无法启动新版本：{ $message }
 releases-restart-unknown-path = 不知道此应用程序自身的位置
 releases-restarting = 已更新 — 正在重启到新版本…
+
+releases-found-dismiss = 不要这些
+releases-found-new-why = 从文件安装，因此没有包管理器有更新的版本。要监视它们的发布吗？
+releases-found-watch = 监视这些
+upgrade-releases-with-run = 也更新从发布页面安装的程序
+upgrade-releases-with-run-description = topgrade 只有在它们是通过会跟踪它们的工具安装时才会更新。手工安装的软件包不属于任何一种，因此升级会在此处应用它们。
+releases-found-new = { $count ->
+   *[other] 有 { $count } 个已安装程序没有其他东西会更新
+}

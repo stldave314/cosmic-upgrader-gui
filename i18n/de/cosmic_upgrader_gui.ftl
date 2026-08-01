@@ -329,3 +329,13 @@ welcome-show-again-description = Zurück zum ersten Bildschirm und seinen Entsch
 releases-restart-failed = Die neue Version konnte nicht gestartet werden: { $message }
 releases-restart-unknown-path = der eigene Speicherort dieser Anwendung ist nicht bekannt
 releases-restarting = Aktualisiert — Neustart in die neue Version …
+
+releases-found-dismiss = Diese nicht
+releases-found-new-why = Aus einer Datei installiert, also hat keine Paketverwaltung eine neuere. Auf Veröffentlichungen beobachten?
+releases-found-watch = Diese beobachten
+upgrade-releases-with-run = Auch von Veröffentlichungsseiten installierte Programme aktualisieren
+upgrade-releases-with-run-description = topgrade aktualisiert diese nur, wenn sie über ein Werkzeug installiert wurden, das sie verfolgt. Ein von Hand installiertes Paket deckt keines ab, daher übernimmt das eine Aktualisierung hier.
+releases-found-new = { $count ->
+    [one] 1 installiertes Programm, das sonst nichts aktualisiert
+   *[other] { $count } installierte Programme, die sonst nichts aktualisiert
+}

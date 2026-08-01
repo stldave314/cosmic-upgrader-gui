@@ -22,6 +22,13 @@ pub const APP_ID: &str = "com.github.cosmic_upgrader_gui";
 /// the packaging targets install the icon under that name.
 pub const APP_ICON: &str = APP_ID;
 
+/// Monochrome icon for the panel's status area.
+///
+/// COSMIC recolours a symbolic icon to match the theme; a full-colour
+/// application icon sits in a row of them looking like a mistake. The
+/// `-symbolic` suffix is the freedesktop convention the icon theme resolves by.
+pub const APP_ICON_SYMBOLIC: &str = concat!("com.github.cosmic_upgrader_gui", "-symbolic");
+
 /// Consulted by the About dialog, derived from the `repository` field in
 /// Cargo.toml so the URL has a single source of truth.
 pub const REPOSITORY_URL: &str = env!("CARGO_PKG_REPOSITORY");

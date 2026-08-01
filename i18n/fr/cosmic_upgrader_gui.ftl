@@ -329,3 +329,13 @@ welcome-show-again-description = Revenir au premier écran et à ses choix.
 releases-restart-failed = La nouvelle version n'a pas pu être lancée : { $message }
 releases-restart-unknown-path = l'emplacement de cette application est inconnu
 releases-restarting = Mis à jour — redémarrage dans la nouvelle version…
+
+releases-found-dismiss = Pas ceux-ci
+releases-found-new-why = Installés depuis un fichier, aucun gestionnaire de paquets n'en a donc de plus récent. Suivre leurs publications ?
+releases-found-watch = Suivre ceux-ci
+upgrade-releases-with-run = Mettre aussi à jour les programmes installés depuis des pages de publication
+upgrade-releases-with-run-description = topgrade ne les met à jour que s'ils ont été installés via un outil qui les suit. Un paquet installé à la main n'est couvert par aucun, donc une mise à niveau les applique ici.
+releases-found-new = { $count ->
+    [one] 1 programme installé que rien d'autre ne mettra à jour
+   *[other] { $count } programmes installés que rien d'autre ne mettra à jour
+}

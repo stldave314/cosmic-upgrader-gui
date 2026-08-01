@@ -1006,7 +1006,7 @@ dependencies = [
 
 [[package]]
 name = "cosmic-upgrader-gui"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "futures-util",
  "i18n-embed",

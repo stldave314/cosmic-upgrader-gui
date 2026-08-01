@@ -342,3 +342,12 @@ welcome-show-again-description = Go back to the first screen and its choices.
 releases-restarting = Updated — restarting into the new version…
 releases-restart-failed = The new version could not be started: { $message }
 releases-restart-unknown-path = this application's own location is not known
+releases-found-new = { $count ->
+    [one] 1 installed program nothing else will update
+   *[other] { $count } installed programs nothing else will update
+}
+releases-found-new-why = Installed from a file, so no package manager has a newer one. Watch them for releases?
+releases-found-watch = Watch these
+releases-found-dismiss = Not these
+upgrade-releases-with-run = Also update programs installed from release pages
+upgrade-releases-with-run-description = topgrade only updates these when they were installed through a tool that tracks them. A package installed by hand is covered by none, so an upgrade run applies those here.

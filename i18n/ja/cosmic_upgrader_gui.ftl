@@ -327,3 +327,12 @@ welcome-show-again-description = 最初の画面とその選択に戻ります�
 releases-restart-failed = 新しいバージョンを起動できませんでした: { $message }
 releases-restart-unknown-path = このアプリケーション自身の場所が分かりません
 releases-restarting = 更新しました — 新しいバージョンで再起動しています…
+
+releases-found-dismiss = これらは不要
+releases-found-new-why = ファイルからインストールされているため、どのパッケージマネージャーにも新しいものがありません。リリースを監視しますか？
+releases-found-watch = これらを監視
+upgrade-releases-with-run = リリースページから導入したプログラムも更新する
+upgrade-releases-with-run-description = topgrade はそれらを追跡するツールで導入した場合にのみ更新します。手作業で入れたパッケージはどれにも該当しないため、更新時にここで適用します。
+releases-found-new = { $count ->
+   *[other] ほかに更新するもののない導入済みプログラムが { $count } 個
+}

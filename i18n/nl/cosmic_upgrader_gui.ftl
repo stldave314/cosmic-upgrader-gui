@@ -329,3 +329,13 @@ welcome-show-again-description = Terug naar het eerste scherm en zijn keuzes.
 releases-restart-failed = De nieuwe versie kon niet worden gestart: { $message }
 releases-restart-unknown-path = de eigen locatie van deze toepassing is niet bekend
 releases-restarting = Bijgewerkt — bezig met herstarten in de nieuwe versie…
+
+releases-found-dismiss = Deze niet
+releases-found-new-why = Geïnstalleerd vanaf een bestand, dus geen pakketbeheerder heeft een nieuwere. Hun uitgaven volgen?
+releases-found-watch = Deze volgen
+upgrade-releases-with-run = Ook programma's bijwerken die van uitgavepagina's zijn geïnstalleerd
+upgrade-releases-with-run-description = topgrade werkt deze alleen bij als ze via een hulpmiddel zijn geïnstalleerd dat ze volgt. Een met de hand geïnstalleerd pakket valt onder geen enkele, dus een opwaardering past ze hier toe.
+releases-found-new = { $count ->
+    [one] 1 geïnstalleerd programma dat niets anders bijwerkt
+   *[other] { $count } geïnstalleerde programma's die niets anders bijwerkt
+}

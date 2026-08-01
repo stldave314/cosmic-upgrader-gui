@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The status-area icon. Monochrome, as COSMIC's panel icons are: the panel
+  recolours a symbolic icon to match the theme, and a full-colour application
+  icon sits in a row of them looking like a mistake.
+
+  Drawn on the 16-pixel symbolic grid, and deliberately plain. An earlier
+  attempt put the application icon's refresh ring and arrow together at this
+  size and they collided into an unreadable blob — at 16 pixels there is room
+  for one idea, so this is the arrow alone over a baseline.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <g fill="none" stroke="#000000" stroke-width="1.7"
+     stroke-linecap="round" stroke-linejoin="round">
+    <!-- The upgrade arrow, pointing up: this installs newer things. -->
+    <path d="M 8 10.5 V 3"/>
+    <path d="M 4.6 6.4 L 8 3 L 11.4 6.4"/>
+    <!-- The system it lands on. -->
+    <path d="M 3 13.2 H 13"/>
+  </g>
+</svg>
