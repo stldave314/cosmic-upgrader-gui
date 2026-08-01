@@ -1,0 +1,106 @@
+[package]
+name = "cosmic-upgrader-gui"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0"
+description = "A COSMIC Desktop front-end for topgrade — configure, schedule and run system-wide upgrades"
+repository = "https://github.com/stldave314/cosmic-upgrader-gui"
+
+[features]
+# Enabled by the packaging targets in install.sh. Forces diagnostic logging off
+# at compile time so a release can never ship with it on, regardless of the
+# `ENABLED` switch in src/debug.rs.
+release-build = []
+# Builds a copy of topgrade into the package as a fallback for systems that do
+# not have one. Off by default: the system topgrade is preferred, and vendoring
+# roughly doubles build time.
+bundled-topgrade = []
+
+[dependencies]
+# topgrade's configuration file is hand-written and heavily commented — the
+# reference alone is 500 lines of explanation. Round-tripping it with a plain
+# serializer would throw all of that away the first time a toggle is flipped,
+# so edits go through toml_edit, which preserves comments, ordering and
+# whitespace and touches only the value being changed.
+#
+# Pinned to the version libcosmic's tree already resolves, so this adds nothing
+# to the build; asking for the older 0.24 line would compile a second copy.
+toml_edit = "0.25"
+# topgrade is an interactive terminal program: it asks what to do after a failed
+# step, and the tools it drives prompt for a sudo password. Both need a terminal
+# on the other end, so it is run under a pseudo-terminal rather than a pipe.
+portable-pty = "0.9"
+futures-util = "0.3"
+# Both are already resolved in libcosmic's tree, so naming them here adds
+# nothing to the build. serde_json stores the run records; jiff turns their
+# timestamps into local dates for the history list.
+serde_json = "1"
+jiff = "0.2"
+i18n-embed-fl = "0.10"
+rust-embed = "8"
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+ksni = { version = "0.3.6", default-features = false, features = ["tokio"] }
+
+[dependencies.i18n-embed]
+version = "0.16"
+features = ["fluent-system", "desktop-requester"]
+
+[dependencies.libcosmic]
+git = "https://github.com/pop-os/libcosmic.git"
+default-features = false
+features = [
+    "dbus-config",
+    "multi-window",
+    "single-instance",
+    "tokio",
+    "wayland",
+    "wgpu",
+    "winit",
+    "xdg-portal",
+]
+
+# Strip symbols from release builds — smaller binary and smaller packages.
+[profile.release]
+strip = true
+
+# ── Packaging metadata ──────────────────────────────────────────────────────
+# .deb via `cargo deb` (cargo-deb). Installs to the same paths as install.sh.
+# `$auto` resolves shared-lib deps.
+[package.metadata.deb]
+maintainer = "Dave <stldave314@users.noreply.github.com>"
+copyright = "2026, Dave"
+license-file = ["LICENSE", "0"]
+section = "admin"
+priority = "optional"
+depends = "$auto"
+# topgrade is what this application drives. It is a recommendation rather than a
+# hard dependency because a `bundled-topgrade` build ships its own copy, and
+# because the window explains the situation clearly when neither is present.
+recommends = "topgrade"
+# needrestart and polkit are only wanted by particular steps and privilege
+# modes; pulling them onto a machine with no use for them would be rude.
+suggests = "policykit-1, libnotify-bin, needrestart"
+extended-description = """
+A COSMIC Desktop front-end for topgrade. Discovers what topgrade can upgrade on \
+this machine, groups the steps into categories and lets each one be switched on \
+or off, edits topgrade's own configuration through a form generated from its \
+reference, runs upgrades with live progress and a per-step summary, and keeps a \
+schedule for unattended runs. Nothing about the step list is built in, so a \
+newer topgrade brings its new capabilities with it."""
+assets = [
+    ["target/release/cosmic-upgrader-gui", "usr/bin/", "755"],
+    ["resources/app.desktop", "usr/share/applications/com.github.cosmic_upgrader_gui.desktop", "644"],
+    ["resources/app.metainfo.xml", "usr/share/metainfo/com.github.cosmic_upgrader_gui.metainfo.xml", "644"],
+    ["resources/icon.svg", "usr/share/icons/hicolor/scalable/apps/com.github.cosmic_upgrader_gui.svg", "644"],
+]
+
+# .rpm via `cargo generate-rpm` (cargo-generate-rpm). Requires a prior release
+# build; dependencies are auto-detected.
+[package.metadata.generate-rpm]
+assets = [
+    { source = "target/release/cosmic-upgrader-gui", dest = "/usr/bin/cosmic-upgrader-gui", mode = "755" },
+    { source = "resources/app.desktop", dest = "/usr/share/applications/com.github.cosmic_upgrader_gui.desktop", mode = "644" },
+    { source = "resources/app.metainfo.xml", dest = "/usr/share/metainfo/com.github.cosmic_upgrader_gui.metainfo.xml", mode = "644" },
+    { source = "resources/icon.svg", dest = "/usr/share/icons/hicolor/scalable/apps/com.github.cosmic_upgrader_gui.svg", mode = "644" },
+]

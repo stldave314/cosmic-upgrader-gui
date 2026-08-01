@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Upgrader
+GenericName=System Upgrades
+Comment=Configure, schedule and run system-wide upgrades with topgrade
+Exec=cosmic-upgrader-gui
+Icon=com.github.cosmic_upgrader_gui
+Terminal=false
+Categories=System;PackageManager;
+Keywords=update;upgrade;topgrade;packages;maintenance;
+StartupNotify=true
+StartupWMClass=com.github.cosmic_upgrader_gui

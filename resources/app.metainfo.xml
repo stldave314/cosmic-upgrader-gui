@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.github.cosmic_upgrader_gui</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0</project_license>
+  <name>Upgrader</name>
+  <summary>Configure, schedule and run system-wide upgrades</summary>
+  <description>
+    <p>
+      A COSMIC Desktop front-end for topgrade. It discovers what topgrade can
+      upgrade on this machine, groups the steps into categories, and lets each
+      one be turned on or off.
+    </p>
+    <p>
+      Nothing about the step list is built in: the steps, the configuration
+      options and what applies to this system are all read from the installed
+      topgrade, so a newer topgrade brings its new capabilities with it.
+    </p>
+    <ul>
+      <li>Every topgrade step, grouped and individually switchable</li>
+      <li>Skip reasons shown in topgrade's own words</li>
+      <li>Full configuration editor generated from topgrade's reference</li>
+      <li>Scheduled checks and optional automatic upgrades</li>
+      <li>Live progress and a per-step summary</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">com.github.cosmic_upgrader_gui.desktop</launchable>
+  <url type="homepage">https://github.com/stldave314/cosmic-upgrader-gui</url>
+  <url type="bugtracker">https://github.com/stldave314/cosmic-upgrader-gui/issues</url>
+  <developer id="io.github.stldave314">
+    <name>Dave</name>
+  </developer>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.0" date="2026-07-31">
+      <description><p>First release.</p></description>
+    </release>
+  </releases>
+</component>

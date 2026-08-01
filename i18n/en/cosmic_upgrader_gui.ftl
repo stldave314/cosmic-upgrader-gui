@@ -1,0 +1,254 @@
+app-title = Upgrader
+app-description = Configure, schedule and run system-wide upgrades with topgrade.
+
+## Navigation
+
+nav-overview = Overview
+nav-schedule = Schedule
+nav-configuration = Configuration
+nav-run = Run
+
+category-system = System
+category-applications = Applications
+category-containers = Containers
+category-development = Development
+category-editors = Editors
+category-repositories = Repositories
+category-shell = Shell
+category-ai-tools = AI Tools
+category-cloud = Cloud
+category-desktop = Desktop
+category-custom = Custom Commands
+category-other = Other
+
+## Overview
+
+overview-heading = Upgrade sources
+overview-subtitle = { $available } of { $total } steps apply to this system.
+topgrade-version = topgrade { $version }
+topgrade-source-system = Installed on this system
+topgrade-source-bundled = Bundled with this application
+scanning = Checking what applies to this system…
+scanning-progress = Checked { $completed } of { $total } — { $step }
+rescan = Rescan
+rescan-tooltip = Check again for newly installed tools
+
+## Steps
+
+steps-heading = Steps
+steps-none = No steps in this category.
+step-available = Ready
+step-unavailable = Unavailable
+step-inactive = Not applicable
+step-deprecated = Deprecated
+step-enabled-tooltip = Include this step when upgrading
+step-disabled-tooltip = Skip this step when upgrading
+step-components = { $count ->
+    [one] 1 component
+   *[other] { $count } components
+}
+enable-all = Enable all
+disable-all = Disable all
+show-unavailable = Show unavailable steps
+show-unavailable-tooltip = Also list steps whose tools are not installed
+
+status-ok = Ready
+status-skipped = Skipped
+status-failed = Failed
+
+## Running
+
+run-heading = Run
+run-now = Run upgrade
+dry-run = Preview
+dry-run-tooltip = Show what would be done without changing anything
+run-in-progress = Upgrading…
+run-step = { $step }
+run-finished = Finished
+run-cancelled = Cancelled
+run-failed = Finished with errors
+run-never = No upgrade has been run yet.
+run-last = Last run { $when }
+run-summary = { $ok } succeeded, { $skipped } skipped, { $failed } failed
+cancel-run = Stop
+clear-log = Clear
+copy-log = Copy output
+run-selected-only = Run only enabled steps
+
+## Authentication
+
+password-title = Administrator password required
+password-body = { $command } needs administrator rights to continue.
+password-placeholder = Password
+authenticate = Authenticate
+authentication-failed = That password was not accepted.
+
+## Schedule
+
+schedule-heading = Scheduled upgrades
+schedule-enabled = Check for upgrades on a schedule
+schedule-frequency = Frequency
+frequency-hourly = Hourly
+frequency-daily = Daily
+frequency-weekly = Weekly
+frequency-monthly = Monthly
+schedule-time = Time of day
+schedule-automatic = Install upgrades automatically
+schedule-automatic-description = When off, a notification reports what is available and nothing is changed.
+schedule-next-run = Next run { $when }
+schedule-next-run-unknown = Next run time is not known.
+schedule-backend-systemd = Runs in the background through a systemd user timer, even when this window is closed.
+schedule-backend-fallback = systemd is not available, so scheduled runs only happen while this window is open.
+schedule-apply = Apply schedule
+schedule-applied = Schedule updated.
+schedule-error = The schedule could not be applied: { $message }
+
+## Configuration
+
+configuration-heading = topgrade configuration
+configuration-path = Editing { $path }
+configuration-default = Default: { $value }
+configuration-not-set = Not set
+configuration-save = Save changes
+configuration-revert = Revert
+configuration-reset = Reset to default
+configuration-unsaved = You have unsaved changes.
+configuration-saved = Configuration saved.
+configuration-free-form = These are commands you name yourself. Edit this section in the file directly.
+configuration-open-file = Open configuration file
+configuration-add = Add
+configuration-remove = Remove
+
+## Application settings
+
+settings = Settings
+about = About
+appearance = Appearance
+theme = Theme
+theme-system = Match desktop
+theme-light = Light
+theme-dark = Dark
+behaviour = Behaviour
+privilege-backend = Administrator rights
+privilege-pty = Ask in this window
+privilege-pty-description = Runs topgrade in a terminal and prompts here when a password is needed.
+privilege-pkexec = System dialog
+privilege-pkexec-description = Uses the desktop's own authentication dialog. Prompts once per command.
+confirm-before-running = Confirm before starting an upgrade
+notify-on-completion = Notify when a scheduled run finishes
+
+## Errors and empty states
+
+topgrade-missing-title = topgrade is not installed
+topgrade-missing-body = This application drives topgrade, which could not be found on this system.
+topgrade-missing-hint = Install it with your package manager, or with: { $command }
+topgrade-too-old-title = topgrade is too old
+topgrade-too-old-body = topgrade { $found } was found, but { $required } or newer is needed.
+error-title = Something went wrong
+retry = Try again
+
+## Common
+
+cancel = Cancel
+close = Close
+save = Save
+ok = OK
+toggle-sidebar = Toggle sidebar
+git-description = Git description
+repository = Repository
+support = Support
+
+## History
+
+nav-history = History
+history-heading = Past runs
+history-none = No runs have been recorded yet.
+view = View
+history-delete = Delete
+history-back = Back to list
+history-origin-manual = Started here
+history-origin-scheduled = Scheduled
+history-outcome-succeeded = Succeeded
+history-outcome-failed = Failed
+history-outcome-cancelled = Cancelled
+history-detail = { $outcome } · { $origin } · { $duration }
+history-duration-seconds = { $seconds }s
+history-transcript-unavailable = The transcript for this run could not be read.
+keep-run-logs = Runs to keep
+
+## Notifications
+
+notify-title-succeeded = Upgrade finished
+notify-title-failed = Upgrade finished with errors
+notify-failed-steps = Failed: { $steps }
+
+## First run
+
+first-run-title = A couple of choices
+first-run-body = These change how the application behaves outside its own window. You can change them later in Settings.
+first-run-autostart = Start with the desktop session
+first-run-autostart-description = Launches minimized at login so scheduled checks can run.
+first-run-tray = Show an icon in the status area
+first-run-tray-description = Lets you hide the window and bring it back, and start an upgrade without opening it.
+first-run-accept = Continue
+autostart = Start with the desktop session
+autostart-description = Adds an entry to ~/.config/autostart
+minimize-to-tray = Hide to the status area instead of quitting
+minimize-to-tray-description = Adds a Hide button. The window manager's close button still quits.
+show-tray-icon = Show an icon in the status area
+
+## Category settings and custom commands
+
+category-settings = Settings for this category
+category-settings-none = This category has no topgrade settings of its own.
+command-name-placeholder = Name
+command-value-placeholder = Command to run
+custom-commands-none = No custom commands yet.
+custom-commands-description = Commands you name yourself. topgrade runs them as their own step.
+
+## Status area
+
+tray-show = Show window
+tray-hide = Hide window
+tray-quit = Quit
+hide-to-tray = Hide to the status area
+tray-unavailable = No status area was found on this desktop, so no icon is shown.
+
+## Releases
+
+nav-releases = Releases
+releases-heading = Project releases
+releases-description = Software installed from a project's releases page has no package manager behind it, so topgrade cannot update it. These are checked against the project itself.
+releases-none = No projects are being watched yet.
+releases-find = Find projects
+releases-finding = Looking through installed packages…
+releases-found = { $count } projects found on this system. Choose which to watch.
+releases-check = Check for updates
+releases-checking = Checking { $done } of { $total }…
+releases-watched = { $count } watched
+releases-update-available = { $version } available
+releases-up-to-date = Up to date
+releases-unknown = { $version } published
+releases-no-releases = No releases published
+releases-error = Could not check: { $message }
+releases-update = Update
+releases-open = Release page
+releases-remove = Stop watching
+releases-add-selected = Watch selected
+releases-cancel-find = Cancel
+releases-installing = Installing { $name }…
+releases-installed = { $name } updated to { $version }
+releases-install-failed = { $name } could not be updated: { $message }
+releases-no-asset = No file on this release matches this system; use the release page.
+releases-no-transport = Neither curl nor gh is installed, so releases cannot be checked.
+releases-unidentified = No project known — { $version } installed
+releases-source = { $source } · { $forge }
+releases-interval = Check automatically
+releases-last-checked = Last checked { $when }
+releases-never-checked = Not checked yet
+interval-manual = Only when asked
+interval-six-hourly = Every 6 hours
+interval-daily = Daily
+interval-weekly = Weekly
+releases-next-check = next { $when }
+run-was-preview = This was a preview — nothing on the system was changed.
