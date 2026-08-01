@@ -72,6 +72,8 @@ const SUDO_COMMAND_KEY: (&str, &str) = ("misc", "sudo_command");
 /// Which page the sidebar has selected.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Page {
+    /// Shown until the first-run choices have been made, then gone.
+    Welcome,
     Overview,
     Steps(Category),
     Run,
@@ -95,10 +97,6 @@ pub enum DialogPage {
     ConfirmRun,
     /// Something in the run is waiting for a password.
     Password { prompt: String },
-    /// Asked once, on the first launch, so the two decisions that change how
-    /// the application behaves outside its own window are made deliberately
-    /// rather than discovered later.
-    FirstRun { autostart: bool, tray: bool },
 }
 
 pub struct Flags {
@@ -186,9 +184,13 @@ pub enum Message {
     EditCommand(String, String, String),
     RemoveCommand(String, String),
 
-    FirstRunToggleAutostart(bool),
-    FirstRunToggleTray(bool),
-    FirstRunAccept,
+    FinishWelcome,
+    ConfigNotifyUpgrades(bool),
+    ConfigNotifyErrors(bool),
+    ConfigClamavScan(bool),
+    ScanFinished(Box<Result<crate::clamav::Report, String>>),
+    ConfigClamscanOptions(String),
+    ConfigClamscanTarget(String),
     ConfigAutostart(bool),
     ConfigMinimizeToTray(bool),
     ConfigShowTrayIcon(bool),
@@ -199,7 +201,6 @@ pub enum Message {
     ConfigConfirmBeforeRunning(bool),
     ConfigAssumeYes(bool),
     ConfigShowUnavailable(bool),
-    ConfigNotify(bool),
     ConfigCheckInterval(usize),
     ConfigChannel(usize),
     AddDirectory,
@@ -312,6 +313,9 @@ struct Run {
     follow_log: bool,
     /// Writes this run to the history as it goes.
     recorder: Option<Recorder>,
+    /// The virus database as it was when the run started, so a change can be
+    /// spotted when it ends.
+    clamav_before: crate::clamav::Fingerprint,
     /// The log's scroll position in pixels as of the last notification.
     ///
     /// Needed because a scroll notification does not say who caused it, and
@@ -379,6 +383,17 @@ impl App {
     fn rebuild_nav(&mut self) {
         let previous = self.page();
         self.nav = nav_bar::Model::default();
+
+        // Only until it has been through once: a permanent "Welcome" entry is
+        // clutter, and these are all reachable in Settings afterwards.
+        if !self.config.first_run_completed {
+            self.nav
+                .insert()
+                .text(fl!("nav-welcome"))
+                .icon(widget::icon::from_name("emblem-favorite-symbolic"))
+                .data(Page::Welcome)
+                .activate();
+        }
 
         self.nav
             .insert()
@@ -543,6 +558,39 @@ impl App {
                 commands: Arc::new(Mutex::new(commands)),
             });
             Message::TrayStarted(handles)
+        })
+    }
+
+    /// Start a virus scan if the run changed the signature database.
+    ///
+    /// Keyed off the database rather than off topgrade's step, because on a
+    /// system where systemd's `clamav-freshclam` is enabled that step correctly
+    /// stands down and the database still changes underneath it.
+    fn scan_if_database_changed(&mut self) -> Task<Message> {
+        if !self.config.clamav_scan {
+            return Task::none();
+        }
+        let Some(run) = self.run.as_ref() else {
+            return Task::none();
+        };
+        let before = run.clamav_before.clone();
+        let after = crate::clamav::fingerprint();
+        if !crate::clamav::changed(&before, &after) {
+            return Task::none();
+        }
+
+        let options = self.config.clamscan_options.clone();
+        let target = self.config.clamscan_target.clone();
+        debug_log!(UI, "virus database changed; scanning");
+        if let Some(ready) = self.ready_mut() {
+            ready.status = Some(fl!("clamav-scanning"));
+        }
+
+        cosmic::task::future(async move {
+            let result = crate::clamav::scan(&options, &target)
+                .await
+                .map_err(|error| error.to_string());
+            Message::ScanFinished(Box::new(result))
         })
     }
 
@@ -784,46 +832,6 @@ impl Application for App {
                     )
                     .into(),
             ),
-            DialogPage::FirstRun { autostart, tray } => Some(
-                widget::dialog()
-                    .icon(widget::icon::from_name(crate::constants::APP_ICON).size(64))
-                    .title(fl!("first-run-title"))
-                    .body(match self.ready() {
-                        Some(ready) if dependencies::has_missing_required(&ready.deps) => {
-                            format!(
-                                "{}\n\n{}",
-                                fl!(
-                                    "dependencies-missing-required",
-                                    count = ready
-                                        .deps
-                                        .iter()
-                                        .filter(|report| report.is_problem())
-                                        .count()
-                                ),
-                                fl!("first-run-body")
-                            )
-                        }
-                        _ => fl!("first-run-body"),
-                    })
-                    .control(
-                        widget::settings::section()
-                            .add(
-                                widget::settings::item::builder(fl!("first-run-autostart"))
-                                    .description(fl!("first-run-autostart-description"))
-                                    .toggler(*autostart, Message::FirstRunToggleAutostart),
-                            )
-                            .add(
-                                widget::settings::item::builder(fl!("first-run-tray"))
-                                    .description(fl!("first-run-tray-description"))
-                                    .toggler(*tray, Message::FirstRunToggleTray),
-                            ),
-                    )
-                    .primary_action(
-                        widget::button::suggested(fl!("first-run-accept"))
-                            .on_press(Message::FirstRunAccept),
-                    )
-                    .into(),
-            ),
             DialogPage::Password { prompt } => Some(
                 widget::dialog()
                     .icon(widget::icon::from_name("dialog-password-symbolic").size(64))
@@ -921,16 +929,6 @@ impl Application for App {
                             directory_draft: String::new(),
                         }));
                         self.rebuild_nav();
-
-                        // Asked after loading rather than before, so the first
-                        // thing seen is the application rather than a question
-                        // about it.
-                        if !self.config.first_run_completed {
-                            self.dialog = Some(DialogPage::FirstRun {
-                                autostart: autostart::is_enabled(),
-                                tray: self.config.minimize_to_tray,
-                            });
-                        }
 
                         let scan = self.start_scan();
 
@@ -1056,6 +1054,12 @@ impl Application for App {
                             follow_log: true,
                             last_log_offset: 0.0,
                             recorder: Recorder::start(Origin::Manual, dry_run, unix_now()),
+                            // Read before anything runs; compared afterwards.
+                            clamav_before: if self.config.clamav_scan && !dry_run {
+                                crate::clamav::fingerprint()
+                            } else {
+                                crate::clamav::Fingerprint::default()
+                            },
                         });
                         self.activate(&Page::Run);
                         // The status-area menu reflects the run, so starting one
@@ -1107,9 +1111,17 @@ impl Application for App {
                             {
                                 // Already visible on screen, so only a failure
                                 // is worth interrupting the user for.
-                                if self.config.notify_on_completion {
-                                    crate::notify::run_finished(&record, true);
-                                }
+                                crate::notify::run_finished(
+                                    &record,
+                                    crate::notify::Policy {
+                                        upgrades: self.config.notify_upgrades,
+                                        errors: self.config.notify_errors,
+                                        installs: self.config.schedule.automatic,
+                                        // Started here, so success is already
+                                        // visible; only a failure is news.
+                                        on_screen: true,
+                                    },
+                                );
                                 history::prune(self.config.keep_run_logs);
                                 if let Some(ready) = match &mut self.state {
                                     State::Ready(ready) => Some(ready),
@@ -1124,7 +1136,8 @@ impl Application for App {
                         if let Some(run) = self.run.as_mut() {
                             run.outcome = Some(outcome);
                         }
-                        return self.tray_running(false);
+                        let scan = self.scan_if_database_changed();
+                        return Task::batch([self.tray_running(false), scan]);
                     }
                 }
 
@@ -1409,12 +1422,6 @@ impl Application for App {
 
             Message::ConfigShowUnavailable(value) => {
                 self.config.show_unavailable_steps = value;
-                self.save_config();
-                Task::none()
-            }
-
-            Message::ConfigNotify(value) => {
-                self.config.notify_on_completion = value;
                 self.save_config();
                 Task::none()
             }
@@ -1810,40 +1817,69 @@ impl Application for App {
                 Task::none()
             }
 
-            Message::FirstRunToggleAutostart(value) => {
-                if let Some(DialogPage::FirstRun { autostart, .. }) = self.dialog.as_mut() {
-                    *autostart = value;
-                }
-                Task::none()
-            }
-
-            Message::FirstRunToggleTray(value) => {
-                if let Some(DialogPage::FirstRun { tray, .. }) = self.dialog.as_mut() {
-                    *tray = value;
-                }
-                Task::none()
-            }
-
-            Message::FirstRunAccept => {
-                let Some(DialogPage::FirstRun { autostart, tray }) = self.dialog.take() else {
-                    return Task::none();
-                };
-                // Recorded whatever was chosen, including choosing neither, so
-                // the question is not asked again.
+            Message::FinishWelcome => {
+                // Whatever was chosen is already saved — these are ordinary
+                // settings, changed as they were touched. This only records
+                // that the screen has been seen.
                 self.config.first_run_completed = true;
-                self.config.minimize_to_tray = tray;
-                self.config.show_tray_icon = tray;
                 self.save_config();
-                self.apply_autostart(autostart);
+                self.rebuild_nav();
 
-                // Something required is missing, so the first thing shown is
+                // Something required is missing, so the next thing shown is
                 // what and why rather than an application that half works.
                 let missing = self
                     .ready()
                     .is_some_and(|ready| dependencies::has_missing_required(&ready.deps));
-                if missing {
-                    self.activate(&Page::Dependencies);
+                self.activate(if missing {
+                    &Page::Dependencies
+                } else {
+                    &Page::Overview
+                });
+                Task::none()
+            }
+
+            Message::ConfigNotifyUpgrades(value) => {
+                self.config.notify_upgrades = value;
+                self.save_config();
+                Task::none()
+            }
+
+            Message::ConfigNotifyErrors(value) => {
+                self.config.notify_errors = value;
+                self.save_config();
+                Task::none()
+            }
+
+            Message::ScanFinished(result) => {
+                if let Some(ready) = self.ready_mut() {
+                    ready.status = Some(match *result {
+                        Ok(report) if report.infected == 0 => {
+                            fl!("clamav-clean", scanned = report.scanned)
+                        }
+                        Ok(report) => {
+                            fl!("clamav-infected", infected = report.infected)
+                        }
+                        Err(message) => fl!("clamav-failed", message = message),
+                    });
                 }
+                Task::none()
+            }
+
+            Message::ConfigClamavScan(value) => {
+                self.config.clamav_scan = value;
+                self.save_config();
+                Task::none()
+            }
+
+            Message::ConfigClamscanOptions(value) => {
+                self.config.clamscan_options = value;
+                self.save_config();
+                Task::none()
+            }
+
+            Message::ConfigClamscanTarget(value) => {
+                self.config.clamscan_target = value;
+                self.save_config();
                 Task::none()
             }
 
@@ -2037,6 +2073,7 @@ impl Application for App {
                 .into(),
             State::Unusable(message) => self.view_unusable(message),
             State::Ready(ready) => match self.page() {
+                Page::Welcome => self.view_welcome(ready),
                 Page::Overview => self.view_overview(ready),
                 Page::Steps(category) => self.view_steps(ready, category),
                 Page::Run => self.view_run(),
@@ -2389,6 +2426,136 @@ impl App {
                 .width(Length::Fill),
             )
             .into()
+    }
+
+    /// What the notification setting will actually do, given the schedule.
+    ///
+    /// "Tell me about upgrades" means two different things depending on whether
+    /// the schedule installs them or only looks, and the user should not have to
+    /// work out which from a generic label.
+    fn notification_wording(&self) -> String {
+        if self.config.schedule.automatic {
+            fl!("notify-upgrades-installed")
+        } else {
+            fl!("notify-upgrades-available")
+        }
+    }
+
+    /// The first screen: the handful of choices worth making before anything
+    /// else, rather than a dialog in front of an application nobody has seen.
+    fn view_welcome<'a>(&'a self, ready: &'a Ready) -> Element<'a, Message> {
+        let missing = ready.deps.iter().filter(|report| report.is_problem()).count();
+
+        let mut column = widget::column::with_children(Vec::new())
+            .spacing(12)
+            .push(widget::text::title2(fl!("welcome-heading")))
+            .push(widget::text::body(fl!("welcome-body")));
+
+        // Anything required that is absent is said first: the rest of these
+        // choices are moot if the application cannot do its job.
+        if missing > 0 {
+            column = column.push(
+                widget::settings::section().add(
+                    widget::settings::item::builder(fl!(
+                        "dependencies-missing-required",
+                        count = missing
+                    ))
+                    .icon(widget::icon::from_name("dialog-error-symbolic"))
+                    .control(
+                        widget::button::suggested(fl!("nav-dependencies"))
+                            .on_press(Message::SelectPage(Page::Dependencies)),
+                    ),
+                ),
+            );
+        }
+
+        column = column.push(
+            widget::settings::section()
+                .title(fl!("welcome-notifications"))
+                .add(
+                    widget::settings::item::builder(fl!("notify-upgrades"))
+                        .description(self.notification_wording())
+                        .toggler(self.config.notify_upgrades, Message::ConfigNotifyUpgrades),
+                )
+                .add(
+                    widget::settings::item::builder(fl!("notify-errors"))
+                        .description(fl!("notify-errors-description"))
+                        .toggler(self.config.notify_errors, Message::ConfigNotifyErrors),
+                ),
+        );
+
+        let mut upgrading = widget::settings::section()
+            .title(fl!("welcome-automatic-heading"))
+            .add(
+                widget::settings::item::builder(fl!("schedule-enabled"))
+                    .toggler(self.config.schedule.enabled, Message::ScheduleEnabled),
+            )
+            .add(
+                widget::settings::item::builder(fl!("schedule-automatic"))
+                    .description(fl!("schedule-automatic-description"))
+                    .toggler(self.config.schedule.automatic, Message::ScheduleAutomatic),
+            );
+
+        // Said plainly and only when it applies: installing without anybody
+        // present cannot ask for a password, so it needs rights the rest of
+        // this application deliberately does not have.
+        if self.config.schedule.automatic {
+            upgrading = upgrading.add(widget::text::caption(fl!("welcome-root-warning")));
+        }
+        column = column.push(upgrading);
+
+        // Offered only where there is something to scan with.
+        if ready.deps.iter().any(|report| report.installed && report.dependency.binary == "clamscan")
+            || which_clamscan()
+        {
+            column = column.push(
+                widget::settings::section()
+                    .title(fl!("welcome-clamav"))
+                    .add(
+                        widget::settings::item::builder(fl!("clamav-scan"))
+                            .description(fl!("clamav-scan-description"))
+                            .toggler(self.config.clamav_scan, Message::ConfigClamavScan),
+                    )
+                    .add(
+                        widget::settings::item::builder(fl!("clamav-target")).control(
+                            widget::text_input("~", self.config.clamscan_target.clone())
+                                .on_input(Message::ConfigClamscanTarget)
+                                .width(Length::Fixed(260.0)),
+                        ),
+                    )
+                    .add(
+                        widget::settings::item::builder(fl!("clamav-options")).control(
+                            widget::text_input(
+                                crate::constants::CLAMSCAN_DEFAULT_OPTIONS,
+                                self.config.clamscan_options.clone(),
+                            )
+                            .on_input(Message::ConfigClamscanOptions)
+                            .width(Length::Fixed(260.0)),
+                        ),
+                    ),
+            );
+        }
+
+        column = column.push(
+            widget::settings::section()
+                .add(
+                    widget::settings::item::builder(fl!("autostart"))
+                        .description(fl!("autostart-description"))
+                        .toggler(autostart::is_enabled(), Message::ConfigAutostart),
+                )
+                .add(
+                    widget::settings::item::builder(fl!("show-tray-icon"))
+                        .toggler(self.config.show_tray_icon, Message::ConfigShowTrayIcon),
+                ),
+        );
+
+        widget::scrollable(
+            column.push(
+                widget::button::suggested(fl!("welcome-finish"))
+                    .on_press(Message::FinishWelcome),
+            ),
+        )
+        .into()
     }
 
     /// The tools this application drives, and whether they are here.
@@ -3271,8 +3438,14 @@ impl App {
                         ),
                 )
                 .add(
-                    widget::settings::item::builder(fl!("notify-on-completion"))
-                        .toggler(self.config.notify_on_completion, Message::ConfigNotify),
+                    widget::settings::item::builder(fl!("notify-upgrades"))
+                        .description(self.notification_wording())
+                        .toggler(self.config.notify_upgrades, Message::ConfigNotifyUpgrades),
+                )
+                .add(
+                    widget::settings::item::builder(fl!("notify-errors"))
+                        .description(fl!("notify-errors-description"))
+                        .toggler(self.config.notify_errors, Message::ConfigNotifyErrors),
                 )
                 .add(
                     widget::settings::item::builder(fl!("autostart"))
@@ -3343,6 +3516,15 @@ fn should_follow_log(
     } else {
         following
     }
+}
+
+/// Whether a virus scanner is available to offer scanning with.
+fn which_clamscan() -> bool {
+    std::env::var_os("PATH")
+        .map(|path| {
+            std::env::split_paths(&path).any(|directory| directory.join("clamscan").is_file())
+        })
+        .unwrap_or(false)
 }
 
 /// Seconds since the Unix epoch.

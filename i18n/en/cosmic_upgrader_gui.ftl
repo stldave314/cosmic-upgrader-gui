@@ -292,3 +292,29 @@ releases-directories-description = Searched for AppImages and other downloaded p
 releases-directory-add = Add directory
 releases-directory-placeholder = Applications
 releases-channel-description = Whether release candidates and betas count as updates.
+notify-title-installed = Upgrades installed
+notify-title-available = Upgrades are available
+
+## Welcome
+
+nav-welcome = Welcome
+welcome-heading = Set up upgrades
+welcome-body = A few choices worth making now. All of them are in Settings afterwards, and nothing here is permanent.
+welcome-finish = Done
+welcome-notifications = Being told about upgrades
+welcome-automatic-heading = Installing upgrades
+welcome-root-warning = Unattended installation needs administrator rights, so the scheduled run is installed as a system service running as root. Nothing else in this application runs as root.
+welcome-clamav = Virus scanning
+clamav-scan = Scan after the virus database updates
+clamav-scan-description = ClamAV is installed. topgrade keeps its database current; this scans with the new database once it changes.
+clamav-options = Scan options
+clamav-target = What to scan
+notify-upgrades = Tell me about upgrades
+notify-upgrades-installed = You will be told what was installed.
+notify-upgrades-available = You will be told what is available to install.
+notify-errors = Tell me when an upgrade fails
+notify-errors-description = Failures are reported even when other notifications are off, unless this is turned off too.
+clamav-scanning = Virus database changed — scanning…
+clamav-clean = Scan finished: { $scanned } files checked, nothing found.
+clamav-infected = Scan finished: { $infected } infected file(s) found.
+clamav-failed = The scan could not run: { $message }

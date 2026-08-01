@@ -8,6 +8,7 @@
 
 mod app;
 mod autostart;
+mod clamav;
 mod config;
 mod constants;
 mod debug;
@@ -146,9 +147,17 @@ fn run_scheduled(mode: ScheduledMode, config: &Config) -> Result<(), String> {
             if let Some(record) = recorder.finish(&components, false, unix_now()) {
                 // Nobody watched this run, so it reports either way rather than
                 // only on failure — that is the whole point of a scheduled one.
-                if config.notify_on_completion {
-                    notify::run_finished(&record, false);
-                }
+                notify::run_finished(
+                    &record,
+                    notify::Policy {
+                        upgrades: config.notify_upgrades,
+                        errors: config.notify_errors,
+                        installs: mode == ScheduledMode::Upgrade,
+                        // Nobody watched this run, so a success is worth
+                        // reporting rather than only a failure.
+                        on_screen: false,
+                    },
+                );
                 history::prune(config.keep_run_logs);
 
                 if record.failed > 0 {

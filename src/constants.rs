@@ -193,14 +193,41 @@ pub const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(30 * 60);
 /// per client.
 pub const RELEASE_CHECK_CONCURRENCY: usize = 4;
 
-/// Directories, relative to the user's home, searched for AppImages.
-pub const APPIMAGE_SEARCH_DIRS: [&str; 5] = [
-    "Applications",
-    "Downloads",
-    ".local/bin",
-    "bin",
-    "AppImages",
-];
+/// Directories, relative to the user's home, searched for downloaded programs.
+///
+/// `Downloads` first because that is where a browser puts things and so where
+/// most downloaded applications actually are; the rest are conventions people
+/// adopt deliberately. Editable in the application, so this is only the
+/// starting point.
+pub const APPIMAGE_SEARCH_DIRS: [&str; 4] =
+    ["Downloads", "Applications", ".local/bin", "AppImages"];
+
+// ── Virus scanning ──────────────────────────────────────────────────────────
+
+/// Options handed to `clamscan` when a scan follows a database update.
+///
+/// `--infected` reports only what matched, `--recursive` descends, and
+/// `--bell` is deliberately absent — a scan that runs unattended should not
+/// make noise. Editable in the application; this is the starting point.
+pub const CLAMSCAN_DEFAULT_OPTIONS: &str = "--infected --recursive --cross-fs=no";
+
+/// What a scan looks at by default.
+///
+/// The user's own files rather than the whole filesystem: a full scan takes
+/// hours and reads every mounted disk, which is not what somebody agreeing to
+/// "scan after an update" is expecting.
+pub const CLAMSCAN_DEFAULT_TARGET: &str = "~";
+
+/// Longest a scan may run before it is abandoned.
+pub const CLAMSCAN_TIMEOUT: Duration = Duration::from_secs(4 * 60 * 60);
+
+/// Files whose modification time says whether the virus database changed.
+///
+/// freshclam rewrites these in place, so comparing their timestamps either side
+/// of a run is what detects an update — including when systemd's own
+/// `clamav-freshclam` did it rather than topgrade, which is the usual case on a
+/// system where the service is enabled.
+pub const CLAMAV_DATABASE_DIR: &str = "/var/lib/clamav";
 
 // ── Scheduling ──────────────────────────────────────────────────────────────
 
@@ -211,6 +238,13 @@ pub const SCHEDULE_UNIT_NAME: &str = "cosmic-upgrader-gui-scheduled";
 /// Directory, relative to the user's config directory, that systemd reads user
 /// units from.
 pub const SYSTEMD_USER_UNIT_DIR: &str = "systemd/user";
+
+/// Where system units live.
+///
+/// Used only when upgrades are installed unattended, which cannot ask for a
+/// password and so has to run as root. Everything else this application
+/// schedules is a user unit.
+pub const SYSTEM_UNIT_DIR: &str = "/etc/systemd/system";
 
 /// How often the in-app fallback scheduler checks whether a run is due.
 ///

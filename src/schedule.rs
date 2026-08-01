@@ -20,13 +20,13 @@
 //! somewhere to put the notification afterwards.
 
 use std::fmt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 
 use serde::{Deserialize, Serialize};
 use tokio::process::Command;
 
-use crate::constants::{SCHEDULE_UNIT_NAME, SYSTEMD_USER_UNIT_DIR};
+use crate::constants::{SCHEDULE_UNIT_NAME, SYSTEMD_USER_UNIT_DIR, SYSTEM_UNIT_DIR};
 use crate::debug::SCHEDULE;
 use crate::debug_log;
 
@@ -252,18 +252,203 @@ fn timer_unit(schedule: Schedule) -> String {
     )
 }
 
+/// Where the units live, which follows what they have to be able to do.
+///
+/// A run that only checks needs nothing special and belongs to the user. One
+/// that *installs* cannot ask for a password — nobody is there — so it has to
+/// already have the rights, which means a system service running as root.
+/// Nothing else in this application runs as root, and the interface says so
+/// before this is switched on.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Scope {
+    User,
+    System,
+}
+
+impl Scope {
+    fn for_schedule(schedule: Schedule) -> Self {
+        if schedule.automatic {
+            Self::System
+        } else {
+            Self::User
+        }
+    }
+
+    fn directory(self) -> Result<PathBuf> {
+        match self {
+            Self::User => unit_directory(),
+            Self::System => Ok(PathBuf::from(SYSTEM_UNIT_DIR)),
+        }
+    }
+
+    fn systemctl_scope(self) -> &'static str {
+        match self {
+            Self::User => "--user",
+            Self::System => "--system",
+        }
+    }
+}
+
 /// Write the units and enable or disable the timer to match.
+///
+/// Both scopes are cleaned up whichever is in use, so turning automatic
+/// installation on or off moves the schedule rather than leaving a second one
+/// running behind it.
 pub async fn apply(schedule: Schedule) -> Result<()> {
+    let scope = Scope::for_schedule(schedule);
+    // Whatever is not wanted goes first, so the two can never both be live.
+    let other = match scope {
+        Scope::User => Scope::System,
+        Scope::System => Scope::User,
+    };
+    let _ = disable(other).await;
+
+    match scope {
+        Scope::User => apply_user(schedule).await,
+        Scope::System => apply_system(schedule).await,
+    }
+}
+
+/// Stop and forget the timer in a scope, ignoring one that was never there.
+async fn disable(scope: Scope) -> Result<()> {
+    let timer = format!("{SCHEDULE_UNIT_NAME}.timer");
+    match scope {
+        Scope::User => {
+            let _ = systemctl(&["disable", "--now", &timer]).await;
+        }
+        Scope::System => {
+            // Only worth an authentication prompt if something is actually
+            // there to remove.
+            if Path::new(SYSTEM_UNIT_DIR)
+                .join(format!("{SCHEDULE_UNIT_NAME}.timer"))
+                .exists()
+            {
+                let _ = privileged(&[
+                    "systemctl",
+                    Scope::System.systemctl_scope(),
+                    "disable",
+                    "--now",
+                    &timer,
+                ])
+                .await;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Install the units as root, so an unattended run can install upgrades.
+async fn apply_system(schedule: Schedule) -> Result<()> {
+    let executable = current_executable();
+    let service = service_unit(&executable, schedule.automatic);
+    let timer = timer_unit(schedule);
+
+    // Staged in the user's own space and then installed with one privileged
+    // command each: writing directly as root would need a shell to redirect
+    // into, and handing a shell a path is how quoting bugs become root bugs.
+    let staged_service = stage(&service, "service")?;
+    let staged_timer = stage(&timer, "timer")?;
+
+    let directory = Scope::System.directory()?;
+    let destination = |extension: &str| {
+        directory
+            .join(format!("{SCHEDULE_UNIT_NAME}.{extension}"))
+            .display()
+            .to_string()
+    };
+
+    privileged(&[
+        "install",
+        "-m",
+        "0644",
+        &staged_service.display().to_string(),
+        &destination("service"),
+    ])
+    .await?;
+    privileged(&[
+        "install",
+        "-m",
+        "0644",
+        &staged_timer.display().to_string(),
+        &destination("timer"),
+    ])
+    .await?;
+
+    let _ = std::fs::remove_file(&staged_service);
+    let _ = std::fs::remove_file(&staged_timer);
+
+    // The scope is named rather than relied on: `systemctl` under pkexec runs
+    // as root and would default to the system manager anyway, but saying which
+    // one is meant leaves no room for that default to change.
+    let scope = Scope::System.systemctl_scope();
+    privileged(&["systemctl", scope, "daemon-reload"]).await?;
+
+    let unit = format!("{SCHEDULE_UNIT_NAME}.timer");
+    if schedule.enabled {
+        privileged(&["systemctl", scope, "enable", "--now", &unit]).await?;
+        debug_log!(SCHEDULE, "system timer enabled: {schedule:?}");
+    } else {
+        privileged(&["systemctl", scope, "disable", "--now", &unit]).await?;
+    }
+    Ok(())
+}
+
+fn stage(contents: &str, extension: &str) -> Result<PathBuf> {
+    let path = std::env::temp_dir().join(format!("{SCHEDULE_UNIT_NAME}.{extension}"));
+    std::fs::write(&path, contents).map_err(|error| Error::Io {
+        path: path.clone(),
+        message: error.to_string(),
+    })?;
+    Ok(path)
+}
+
+fn current_executable() -> String {
+    std::env::current_exe()
+        .map(|path| path.display().to_string())
+        .unwrap_or_else(|_| env!("CARGO_PKG_NAME").to_owned())
+}
+
+/// Run one command as root through the desktop's authentication dialog.
+async fn privileged(args: &[&str]) -> Result<()> {
+    let output = Command::new(crate::constants::PKEXEC)
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true)
+        .output()
+        .await
+        .map_err(|error| Error::Systemctl {
+            message: error.to_string(),
+        })?;
+
+    if output.status.success() {
+        return Ok(());
+    }
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stderr = stderr.trim();
+    Err(Error::Systemctl {
+        message: if stderr.is_empty() {
+            match output.status.code() {
+                Some(126) => "authentication was dismissed".to_owned(),
+                Some(code) => format!("{args:?} exited with {code}"),
+                None => format!("{args:?} was terminated"),
+            }
+        } else {
+            stderr.to_owned()
+        },
+    })
+}
+
+async fn apply_user(schedule: Schedule) -> Result<()> {
     let directory = unit_directory()?;
     std::fs::create_dir_all(&directory).map_err(|error| Error::Io {
         path: directory.clone(),
         message: error.to_string(),
     })?;
 
-    let executable = std::env::current_exe()
-        .map(|path| path.display().to_string())
-        .unwrap_or_else(|_| env!("CARGO_PKG_NAME").to_owned());
-
+    let executable = current_executable();
     write_unit(service_path()?, &service_unit(&executable, schedule.automatic))?;
     write_unit(timer_path()?, &timer_unit(schedule))?;
 
@@ -444,6 +629,33 @@ mod tests {
             ..Schedule::default()
         };
         assert!(!schedule.is_due(2_000_000, 1_000_000));
+    }
+
+    #[test]
+    fn a_checking_schedule_belongs_to_the_user() {
+        let checking = Schedule {
+            enabled: true,
+            automatic: false,
+            ..Schedule::default()
+        };
+        assert_eq!(Scope::for_schedule(checking), Scope::User);
+        assert_eq!(Scope::for_schedule(checking).systemctl_scope(), "--user");
+    }
+
+    #[test]
+    fn an_installing_schedule_needs_the_system_scope() {
+        // Nobody is present to type a password, so the run has to already have
+        // the rights.
+        let installing = Schedule {
+            enabled: true,
+            automatic: true,
+            ..Schedule::default()
+        };
+        assert_eq!(Scope::for_schedule(installing), Scope::System);
+        assert_eq!(
+            Scope::for_schedule(installing).directory().unwrap(),
+            PathBuf::from(SYSTEM_UNIT_DIR)
+        );
     }
 
     #[test]

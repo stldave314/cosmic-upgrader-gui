@@ -278,3 +278,29 @@ dependencies-missing-required = { $count ->
    *[other] Er ontbreken { $count } vereiste hulpmiddelen.
 }
 releases-channel-description = Of release-kandidaten en bèta's als updates tellen.
+
+## Welcome, notifications and virus scanning
+
+clamav-clean = Scan klaar: { $scanned } bestanden gecontroleerd, niets gevonden.
+clamav-failed = De scan kon niet worden uitgevoerd: { $message }
+clamav-infected = Scan klaar: { $infected } geïnfecteerd(e) bestand(en) gevonden.
+clamav-options = Scanopties
+clamav-scan = Scannen nadat de virusdatabase is bijgewerkt
+clamav-scan-description = ClamAV is geïnstalleerd. topgrade houdt de database actueel; dit scant met de nieuwe database zodra die verandert.
+clamav-scanning = Virusdatabase gewijzigd — bezig met scannen…
+clamav-target = Wat er wordt gescand
+nav-welcome = Welkom
+notify-errors = Waarschuw me als een opwaardering mislukt
+notify-errors-description = Mislukkingen worden gemeld ook als andere meldingen uitstaan, tenzij dit ook wordt uitgezet.
+notify-title-available = Er zijn opwaarderingen beschikbaar
+notify-title-installed = Opwaarderingen geïnstalleerd
+notify-upgrades = Vertel me over opwaarderingen
+notify-upgrades-available = U hoort wat er beschikbaar is om te installeren.
+notify-upgrades-installed = U hoort wat er is geïnstalleerd.
+welcome-automatic-heading = Opwaarderingen installeren
+welcome-body = Een paar keuzes die nu de moeite waard zijn. Ze staan daarna allemaal bij Instellingen, en niets hiervan is blijvend.
+welcome-clamav = Virusscan
+welcome-finish = Klaar
+welcome-heading = Opwaarderingen instellen
+welcome-notifications = Meldingen
+welcome-root-warning = Onbeheerd installeren vereist beheerdersrechten, dus de geplande uitvoering wordt geïnstalleerd als systeemdienst die als root draait. Niets anders in deze toepassing draait als root.

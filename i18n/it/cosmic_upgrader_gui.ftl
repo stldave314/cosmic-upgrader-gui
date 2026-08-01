@@ -278,3 +278,29 @@ dependencies-missing-required = { $count ->
    *[other] Mancano { $count } strumenti necessari.
 }
 releases-channel-description = Se le candidate al rilascio e le beta contano come aggiornamenti.
+
+## Welcome, notifications and virus scanning
+
+clamav-clean = Scansione terminata: { $scanned } file controllati, nulla trovato.
+clamav-failed = Non è stato possibile eseguire la scansione: { $message }
+clamav-infected = Scansione terminata: { $infected } file infetti.
+clamav-options = Opzioni di scansione
+clamav-scan = Analizza dopo l'aggiornamento del database virus
+clamav-scan-description = ClamAV è installato. topgrade ne tiene aggiornato il database; questo esegue una scansione con il nuovo database appena cambia.
+clamav-scanning = Il database virus è cambiato — scansione in corso…
+clamav-target = Cosa analizzare
+nav-welcome = Benvenuto
+notify-errors = Avvisami quando un aggiornamento fallisce
+notify-errors-description = I fallimenti vengono segnalati anche con le altre notifiche disattivate, a meno che non si disattivi anche questa.
+notify-title-available = Sono disponibili aggiornamenti
+notify-title-installed = Aggiornamenti installati
+notify-upgrades = Informami sugli aggiornamenti
+notify-upgrades-available = Ti verrà detto cosa è disponibile da installare.
+notify-upgrades-installed = Ti verrà detto cosa è stato installato.
+welcome-automatic-heading = Installazione degli aggiornamenti
+welcome-body = Alcune scelte che vale la pena fare ora. Sono tutte nelle Impostazioni in seguito, e nulla è definitivo.
+welcome-clamav = Scansione antivirus
+welcome-finish = Fatto
+welcome-heading = Configura gli aggiornamenti
+welcome-notifications = Notifiche
+welcome-root-warning = L'installazione non presidiata richiede i permessi di amministratore, quindi l'esecuzione pianificata viene installata come servizio di sistema eseguito come root. Nient'altro in questa applicazione viene eseguito come root.

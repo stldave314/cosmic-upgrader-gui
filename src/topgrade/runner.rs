@@ -83,6 +83,12 @@ impl Options {
         args.push("--no-ask-retry".to_owned());
         // Skip reasons are what the interface shows against each step.
         args.push("--show-skipped".to_owned());
+        // topgrade posts its own notification when a run ends. This application
+        // posts a better one — it knows whether the run was scheduled, and names
+        // the steps that failed rather than only that something did — so two
+        // would be one too many.
+        args.push("--notify-end".to_owned());
+        args.push("never".to_owned());
 
         if !self.only.is_empty() {
             args.push("--only".to_owned());
@@ -463,6 +469,14 @@ mod tests {
     #[test]
     fn leaves_plain_text_untouched() {
         assert_eq!(strip_ansi("cargo: OK"), "cargo: OK");
+    }
+
+    #[test]
+    fn topgrades_own_end_of_run_notification_is_turned_off() {
+        // This application posts its own, which knows more.
+        let args = Options::default().to_args();
+        let at = args.iter().position(|a| a == "--notify-end").expect("--notify-end");
+        assert_eq!(args.get(at + 1).map(String::as_str), Some("never"));
     }
 
     #[test]

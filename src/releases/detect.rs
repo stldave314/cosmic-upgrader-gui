@@ -7,6 +7,19 @@
 //! matters, because a `Homepage:` field is a hint about where a project lives,
 //! not a promise that its releases are what got installed.
 //!
+//! ## Only what nothing else will update
+//!
+//! A package that came from a distribution repository is already covered: apt
+//! or dnf will update it, and topgrade drives them. Offering it here as well
+//! would be noise — on the machine this was written against, 552 installed
+//! packages name a forge in their metadata, and all but six of them arrive from
+//! a repository.
+//!
+//! Those six are the point: software installed by downloading a `.deb` from a
+//! releases page, which no package manager will ever update again. The test is
+//! whether any remote source offers the package — `apt-cache policy` says so
+//! directly — and it is what turns a list of 360 into a list of 6.
+//!
 //! Three sources, in descending order of how much they can be trusted:
 //!
 //! 1. **An AppImage's embedded update information.** Type-2 AppImages carry a
@@ -19,6 +32,7 @@
 //!    most of them in practice. It gives a name and a version but no project, so
 //!    those are offered for the user to point at a repository themselves.
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use super::forge::Repo;
@@ -103,6 +117,68 @@ pub fn parse_dpkg_status(text: &str) -> Vec<Candidate> {
     }
 
     candidates
+}
+
+/// The packages `apt-cache policy` shows no remote source for.
+///
+/// Such a package was installed from a file and apt has nowhere to get a newer
+/// one, which is exactly the case release tracking exists for. Everything else
+/// is left to the package manager that owns it.
+///
+/// The output lists each package, then its version table; an origin line either
+/// names a URL or names dpkg's own status file. A package with only the latter
+/// is not coming from anywhere.
+pub fn parse_apt_policy(output: &str) -> HashSet<String> {
+    let mut unmanaged = HashSet::new();
+    let mut package: Option<&str> = None;
+    let mut remote = false;
+    let mut local = false;
+
+    let mut finish = |package: &mut Option<&str>, remote: &mut bool, local: &mut bool| {
+        if let Some(name) = package.take() {
+            if *local && !*remote {
+                unmanaged.insert(name.to_owned());
+            }
+        }
+        *remote = false;
+        *local = false;
+    };
+
+    for line in output.lines() {
+        // A package header is unindented and ends in a colon.
+        if !line.starts_with(char::is_whitespace) && line.ends_with(':') {
+            finish(&mut package, &mut remote, &mut local);
+            package = Some(&line[..line.len() - 1]);
+            continue;
+        }
+
+        let trimmed = line.trim_start();
+        if trimmed.contains("://") {
+            remote = true;
+        } else if trimmed.contains("/var/lib/dpkg/status") {
+            local = true;
+        }
+    }
+    finish(&mut package, &mut remote, &mut local);
+
+    unmanaged
+}
+
+/// The packages dnf shows as installed from somewhere other than a repository.
+///
+/// `from_repo` is the repository a package came from; one installed from a file
+/// on the command line reports `@commandline` or nothing at all.
+pub fn parse_dnf_installed(output: &str) -> HashSet<String> {
+    output
+        .lines()
+        .filter_map(|line| {
+            let mut fields = line.split_whitespace();
+            let name = fields.next()?;
+            let from = fields.next().unwrap_or_default();
+            (from.is_empty() || from == "@commandline" || from == "@System")
+                .then(|| name.to_owned())
+        })
+        .collect()
 }
 
 /// Read the output of `rpm -qa --qf '%{NAME}\t%{VERSION}\t%{URL}\n'`.
@@ -296,6 +372,12 @@ pub fn find_appimages(directories: &[String]) -> Vec<Candidate> {
             if !file_name.to_ascii_lowercase().ends_with(".appimage") {
                 continue;
             }
+            // A downloaded file that was never made runnable is not something
+            // in use, and this is an updater rather than an installer.
+            if !is_executable(&path) {
+                debug_log!(RELEASES, "{file_name}: not executable, not in use");
+                continue;
+            }
 
             candidates.push(read_appimage(&path, file_name));
         }
@@ -303,6 +385,19 @@ pub fn find_appimages(directories: &[String]) -> Vec<Candidate> {
 
     debug_log!(RELEASES, "{} AppImage(s) found", candidates.len());
     candidates
+}
+
+#[cfg(unix)]
+fn is_executable(path: &Path) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    path.metadata()
+        .map(|meta| meta.permissions().mode() & 0o111 != 0)
+        .unwrap_or(false)
+}
+
+#[cfg(not(unix))]
+fn is_executable(path: &Path) -> bool {
+    path.is_file()
 }
 
 fn read_appimage(path: &Path, file_name: &str) -> Candidate {
@@ -400,6 +495,71 @@ Homepage: https://www.gnu.org/software/coreutils/
         // The Debian epoch travels with the version and is dealt with when
         // comparing, not here.
         assert_eq!(kwin.version, "4:5.27.5-2");
+    }
+
+    #[test]
+    fn a_package_from_a_repository_is_left_to_the_package_manager() {
+        let output = "\
+curl:
+  Installed: 8.5.0
+  Version table:
+ *** 8.5.0 500
+        500 http://apt.pop-os.org/ubuntu noble/main amd64 Packages
+        100 /var/lib/dpkg/status
+";
+        assert!(parse_apt_policy(output).is_empty());
+    }
+
+    #[test]
+    fn a_package_installed_from_a_file_is_a_candidate() {
+        // Nothing offers it, so apt will never update it — which is the whole
+        // reason for tracking releases.
+        let output = "\
+winboat:
+  Installed: 1.2.3
+  Version table:
+ *** 1.2.3 100
+        100 /var/lib/dpkg/status
+";
+        let unmanaged = parse_apt_policy(output);
+        assert_eq!(unmanaged.len(), 1);
+        assert!(unmanaged.contains("winboat"));
+    }
+
+    #[test]
+    fn several_packages_are_told_apart() {
+        let output = "\
+curl:
+  Installed: 8.5.0
+  Version table:
+ *** 8.5.0 500
+        500 http://apt.pop-os.org/ubuntu noble/main amd64 Packages
+        100 /var/lib/dpkg/status
+yapcap:
+  Installed: 0.4.0
+  Version table:
+ *** 0.4.0 100
+        100 /var/lib/dpkg/status
+bash:
+  Installed: 5.2
+  Version table:
+ *** 5.2 500
+        500 http://apt.pop-os.org/ubuntu noble/main amd64 Packages
+        100 /var/lib/dpkg/status
+";
+        let unmanaged = parse_apt_policy(output);
+        assert_eq!(unmanaged.len(), 1, "{unmanaged:?}");
+        assert!(unmanaged.contains("yapcap"));
+    }
+
+    #[test]
+    fn dnf_reports_command_line_installs_as_unmanaged() {
+        let output = "curl fedora\nwinboat @commandline\nbash updates\nthing\n";
+        let unmanaged = parse_dnf_installed(output);
+        assert!(unmanaged.contains("winboat"));
+        assert!(unmanaged.contains("thing"));
+        assert!(!unmanaged.contains("curl"));
+        assert!(!unmanaged.contains("bash"));
     }
 
     #[test]

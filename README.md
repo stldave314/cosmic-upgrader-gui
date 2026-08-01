@@ -12,6 +12,13 @@ into categories, lets you switch each step on or off, edits topgrade's own
 configuration through a form, runs the upgrade with live progress, and keeps a
 schedule for unattended runs.
 
+![The first screen](docs/welcome.png)
+
+The first screen is the handful of choices worth making before anything else —
+not a dialog in front of an application nobody has seen yet. Everything on it is
+in Settings afterwards, and the whole screen disappears once it has been through
+once.
+
 ![The overview, showing what applies to this system](docs/overview.png)
 
 ## Nothing about topgrade is hard-coded
@@ -100,6 +107,7 @@ than by hunting down a long configuration page.
 - **Updates itself** the same way, whatever it was installed from.
 - **A dependency check** saying what each tool it drives is for, whether it is
   required, and whether you have it.
+- **A virus scan after the ClamAV database changes**, if you want one.
 
 ## Release tracking
 
@@ -138,6 +146,13 @@ off.
 Nothing is guessed at from the network. Candidates are derived from what the
 installed archives already say about themselves, and then confirmed by you:
 
+0. **Only what nothing else will update.** A package from a distribution
+   repository is already covered — apt or dnf will update it and topgrade drives
+   them — so offering it here too is noise. On the machine this was written
+   against, 552 installed packages name a forge in their metadata and all but
+   six come from a repository. `apt-cache policy` says which have no remote
+   source at all, and `dnf repoquery` does the same on rpm systems. That turns a
+   list of 360 into a list of 6.
 1. **An AppImage's embedded update information.** Type-2 AppImages carry a
    `.upd_info` ELF section holding exactly what is needed —
    `gh-releases-zsync|owner|repo|latest|App-*.AppImage.zsync`. That is the
@@ -228,6 +243,55 @@ your credentials and gets 5000 requests an hour where an unauthenticated client
 gets 60 — a watch list of any size exhausts that immediately. Both are detected
 rather than assumed; if neither is present the page says so once instead of
 every row reporting the same failure.
+
+## Notifications
+
+One switch, worded for what will actually happen. "Tell me about upgrades" means
+two different things depending on whether the schedule installs them or only
+looks, and you should not have to work that out from a generic message — so the
+notification says *"Upgrades installed"* or *"Upgrades are available"*
+accordingly, and the setting's own description says which you will get.
+
+Failures are reported even when that is switched off. A failed unattended
+upgrade is the one outcome worth interrupting somebody for — the whole point of
+scheduling it is not having to check — so turning those off is a separate,
+deliberate switch.
+
+topgrade posts its own end-of-run notification. This turns it off with
+`--notify-end never`, because the one here knows more: whether the run was
+scheduled, and which steps failed rather than only that something did.
+
+## Installing without anybody there
+
+A run that only *checks* needs no special rights and is a systemd **user**
+timer. A run that **installs** cannot ask for a password — nobody is there — so
+it has to already have the rights, which means a **system** service running as
+root, installed to `/etc/systemd/system` through `pkexec`.
+
+That is a real difference and the first screen says so before the switch is
+turned on. Nothing else in this application runs as root. Switching automatic
+installation on or off moves the schedule between the two scopes rather than
+leaving a second one running behind it.
+
+## Virus scanning
+
+topgrade already keeps ClamAV's database current — its `clam_av_db` step runs
+`freshclam`, and stands down when systemd's `clamav-freshclam` service is doing
+it instead, which on most systems it is. What neither of them does is *use* the
+new database.
+
+So this watches the database rather than the updater: the signature files are
+fingerprinted either side of a run, which catches a change however it happened.
+That matters, because on a system where the systemd service is enabled
+topgrade's own step correctly reports `SKIPPED: freshclam autoupdate is active
+via systemd` and the database still changes underneath it.
+
+The scan is off unless asked for, offered only when `clamscan` is actually
+installed, and scans your home directory by default rather than the whole
+filesystem — somebody agreeing to "scan after an update" is not asking for
+several hours of disk reads. Options and target are both editable, and the
+option string is split on whitespace rather than handed to a shell, so nothing
+in it can become another command.
 
 ## Dependencies
 
@@ -427,6 +491,7 @@ topgrade is always preferred, so upgrading topgrade upgrades what this can do.
 ./install.sh tarball     # portable tarball
 ./install.sh packages    # all three
 ./install.sh check       # check, clippy, tests and locale validation
+./install.sh update      # update dependencies, then verify the result builds
 ./install.sh locales     # locale validation on its own
 ./install.sh hooks       # install the git hooks
 ```

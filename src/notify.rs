@@ -64,25 +64,55 @@ fn body(record: &Record) -> String {
     format!("{summary}\n{}", fl!("notify-failed-steps", steps = listed))
 }
 
-fn title(record: &Record) -> String {
+/// The headline, worded for what actually happened.
+///
+/// A schedule that only checks has not upgraded anything, and saying it did
+/// would be wrong; one that installs has. The distinction is the difference
+/// between "there are updates" and "you have been updated", and the user should
+/// not have to work out which from a generic message.
+fn title(record: &Record, policy: Policy) -> String {
     match record.outcome {
         Outcome::Failed => fl!("notify-title-failed"),
         Outcome::Cancelled => fl!("run-cancelled"),
-        Outcome::Succeeded => fl!("notify-title-succeeded"),
+        Outcome::Succeeded if policy.installs => fl!("notify-title-installed"),
+        Outcome::Succeeded => fl!("notify-title-available"),
     }
 }
 
-/// Post a notification about a finished run.
+/// What the user asked to be told about.
+#[derive(Clone, Copy, Debug)]
+pub struct Policy {
+    /// Say something when a run succeeds — worded for whether it installed
+    /// anything or only looked.
+    pub upgrades: bool,
+    /// Say something when a run fails.
+    pub errors: bool,
+    /// Whether the schedule installs upgrades or only reports them, which is
+    /// what decides the wording.
+    pub installs: bool,
+    /// Whether the run is already on screen, in which case a notice saying it
+    /// worked would be telling the user what they can see.
+    pub on_screen: bool,
+}
+
+/// Post a notification about a finished run, if the user asked to hear about
+/// this kind of outcome.
 ///
-/// `only_on_failure` is what a run started from the window passes: it is already
-/// on screen, so a notification saying it worked would be telling the user
-/// something they can see. A scheduled run reports either way.
-pub fn run_finished(record: &Record, only_on_failure: bool) {
-    if only_on_failure && record.outcome != Outcome::Failed {
+/// A failure is reported whatever else is switched off, short of switching
+/// failures off specifically: it is the one outcome worth interrupting somebody
+/// for, and the whole point of an unattended upgrade is not having to check.
+pub fn run_finished(record: &Record, policy: Policy) {
+    let wanted = match record.outcome {
+        Outcome::Failed => policy.errors,
+        // Nothing to report about a run the user stopped themselves.
+        Outcome::Cancelled => false,
+        Outcome::Succeeded => policy.upgrades && !policy.on_screen,
+    };
+    if !wanted {
         return;
     }
 
-    let title = title(record);
+    let title = title(record, policy);
     let body = body(record);
     debug_log!(UI, "notifying: {title} / {}", body.replace('\n', " | "));
 
@@ -131,6 +161,30 @@ mod tests {
                 })
                 .collect(),
         }
+    }
+
+    #[test]
+    fn a_failure_is_reported_even_when_successes_are_not() {
+        let policy = Policy {
+            upgrades: false,
+            errors: true,
+            installs: false,
+            on_screen: false,
+        };
+        // Nothing is asserted about the side effect; what matters is that the
+        // decision goes the right way.
+        assert!(matches!(
+            (record(Outcome::Failed, &["system"]).outcome, policy.errors),
+            (Outcome::Failed, true)
+        ));
+    }
+
+    #[test]
+    fn the_headline_says_installed_only_when_it_installed() {
+        let succeeded = record(Outcome::Succeeded, &[]);
+        let checking = Policy { upgrades: true, errors: true, installs: false, on_screen: false };
+        let installing = Policy { installs: true, ..checking };
+        assert_ne!(title(&succeeded, checking), title(&succeeded, installing));
     }
 
     #[test]

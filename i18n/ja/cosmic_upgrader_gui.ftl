@@ -276,3 +276,29 @@ dependencies-missing-required = { $count ->
    *[other] 必須のツールが { $count } 個不足しています。
 }
 releases-channel-description = リリース候補やベータ版を更新として扱うかどうか。
+
+## Welcome, notifications and virus scanning
+
+clamav-clean = スキャン完了: { $scanned } 個のファイルを確認し、何も見つかりませんでした。
+clamav-failed = スキャンを実行できませんでした: { $message }
+clamav-infected = スキャン完了: 感染ファイルが { $infected } 個見つかりました。
+clamav-options = スキャンのオプション
+clamav-scan = ウイルス定義の更新後にスキャンする
+clamav-scan-description = ClamAV がインストールされています。topgrade が定義を最新に保ち、定義が変わり次第これが新しい定義でスキャンします。
+clamav-scanning = ウイルス定義が変わりました — スキャンしています…
+clamav-target = スキャンの対象
+nav-welcome = ようこそ
+notify-errors = 更新に失敗したら知らせる
+notify-errors-description = 他の通知を切っていても失敗は通知されます。これも切った場合を除きます。
+notify-title-available = 更新が利用できます
+notify-title-installed = 更新をインストールしました
+notify-upgrades = 更新について知らせる
+notify-upgrades-available = インストールできるものをお知らせします。
+notify-upgrades-installed = インストールされたものをお知らせします。
+welcome-automatic-heading = 更新のインストール
+welcome-body = いま決めておくとよい項目です。あとから設定でも変更でき、どれも取り消せます。
+welcome-clamav = ウイルススキャン
+welcome-finish = 完了
+welcome-heading = 更新の設定
+welcome-notifications = 通知
+welcome-root-warning = 無人でのインストールには管理者権限が必要なため、予約実行は root で動作するシステムサービスとして設定されます。このアプリケーションの他の部分は root では動作しません。

@@ -66,6 +66,8 @@ pub const HISTORY: &str = "hist";
 pub const RELEASES: &str = "rel";
 /// Checking for the tools this application drives.
 pub const DEPS: &str = "deps";
+/// Virus database changes and the scans that follow them.
+pub const CLAMAV: &str = "clam";
 
 /// Process start, so each line can be stamped with elapsed time rather than a
 /// wall clock the reader has to subtract by hand.

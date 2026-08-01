@@ -423,11 +423,29 @@ pub async fn discover(appimage_dirs: &[String]) -> Vec<detect::Candidate> {
     let mut candidates = Vec::new();
 
     match tokio::fs::read_to_string("/var/lib/dpkg/status").await {
-        Ok(text) => candidates.extend(detect::parse_dpkg_status(&text)),
+        Ok(text) => {
+            let named = detect::parse_dpkg_status(&text);
+            // Everything a repository offers is already covered by the package
+            // manager, and topgrade drives that. Only what nothing will update
+            // is worth tracking here.
+            let unmanaged = apt_unmanaged(&named).await;
+            let before = named.len();
+            candidates.extend(
+                named
+                    .into_iter()
+                    .filter(|candidate| unmanaged.contains(&candidate.name)),
+            );
+            debug_log!(
+                RELEASES,
+                "{before} packages name a forge, {} are not offered by any repository",
+                candidates.len()
+            );
+        }
         Err(error) => debug_log!(RELEASES, "no dpkg database: {error}"),
     }
 
     if which("rpm").await {
+        let unmanaged = dnf_unmanaged().await;
         let output = Command::new("rpm")
             .args(["-qa", "--qf", "%{NAME}\\t%{VERSION}\\t%{URL}\\n"])
             .stdin(Stdio::null())
@@ -437,9 +455,17 @@ pub async fn discover(appimage_dirs: &[String]) -> Vec<detect::Candidate> {
             .output()
             .await;
         if let Ok(output) = output {
-            candidates.extend(detect::parse_rpm_output(&String::from_utf8_lossy(
-                &output.stdout,
-            )));
+            candidates.extend(
+                detect::parse_rpm_output(&String::from_utf8_lossy(&output.stdout))
+                    .into_iter()
+                    // As with apt: a package a repository offers is already
+                    // covered, and only what nothing will update belongs here.
+                    .filter(|candidate| {
+                        unmanaged
+                            .as_ref()
+                            .is_none_or(|known| known.contains(&candidate.name))
+                    }),
+            );
         }
     }
 
@@ -469,6 +495,74 @@ pub async fn discover(appimage_dirs: &[String]) -> Vec<detect::Candidate> {
     unique.sort_by(|a, b| a.name.cmp(&b.name));
     debug_log!(RELEASES, "{} candidate project(s)", unique.len());
     unique
+}
+
+/// Ask apt which of these packages no repository offers.
+///
+/// Only the packages that got this far are asked about — a few hundred rather
+/// than every installed package — which keeps this to well under a second.
+async fn apt_unmanaged(candidates: &[detect::Candidate]) -> std::collections::HashSet<String> {
+    let names: Vec<&str> = candidates
+        .iter()
+        .map(|candidate| candidate.name.as_str())
+        .collect();
+
+    if names.is_empty() || !which("apt-cache").await {
+        // Without apt there is nothing to ask, so nothing is excluded: a system
+        // with a different package manager should not silently lose its list.
+        return candidates
+            .iter()
+            .map(|candidate| candidate.name.clone())
+            .collect();
+    }
+
+    let output = Command::new("apt-cache")
+        .arg("policy")
+        .args(&names)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .kill_on_drop(true)
+        .output()
+        .await;
+
+    match output {
+        Ok(output) => detect::parse_apt_policy(&String::from_utf8_lossy(&output.stdout)),
+        Err(error) => {
+            debug_log!(RELEASES, "apt-cache failed: {error}");
+            candidates
+                .iter()
+                .map(|candidate| candidate.name.clone())
+                .collect()
+        }
+    }
+}
+
+/// Ask dnf which installed packages did not come from a repository.
+///
+/// `None` when dnf cannot be asked, which means nothing is excluded rather
+/// than everything.
+async fn dnf_unmanaged() -> Option<std::collections::HashSet<String>> {
+    if !which("dnf").await {
+        return None;
+    }
+    let output = Command::new("dnf")
+        .args([
+            "repoquery",
+            "--installed",
+            "--queryformat",
+            "%{name} %{from_repo}",
+        ])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .kill_on_drop(true)
+        .output()
+        .await
+        .ok()?;
+    Some(detect::parse_dnf_installed(&String::from_utf8_lossy(
+        &output.stdout,
+    )))
 }
 
 async fn which(name: &str) -> bool {

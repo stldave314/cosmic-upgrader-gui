@@ -278,3 +278,29 @@ dependencies-missing-required = { $count ->
    *[other] Faltan { $count } herramientas necesarias.
 }
 releases-channel-description = Si las candidatas y las betas cuentan como actualizaciones.
+
+## Welcome, notifications and virus scanning
+
+clamav-clean = Análisis terminado: { $scanned } archivos comprobados, no se encontró nada.
+clamav-failed = No se pudo ejecutar el análisis: { $message }
+clamav-infected = Análisis terminado: { $infected } archivo(s) infectado(s).
+clamav-options = Opciones de análisis
+clamav-scan = Analizar tras actualizarse la base de datos de virus
+clamav-scan-description = ClamAV está instalado. topgrade mantiene su base de datos al día; esto analiza con la nueva base en cuanto cambia.
+clamav-scanning = La base de datos de virus cambió: analizando…
+clamav-target = Qué analizar
+nav-welcome = Bienvenida
+notify-errors = Avisarme cuando una actualización falle
+notify-errors-description = Los fallos se avisan aunque el resto de notificaciones estén desactivadas, salvo que esto también se desactive.
+notify-title-available = Hay actualizaciones disponibles
+notify-title-installed = Actualizaciones instaladas
+notify-upgrades = Avisarme de las actualizaciones
+notify-upgrades-available = Se le dirá qué hay disponible para instalar.
+notify-upgrades-installed = Se le dirá qué se ha instalado.
+welcome-automatic-heading = Instalación de actualizaciones
+welcome-body = Unas pocas decisiones que conviene tomar ahora. Todas están después en Ajustes, y nada de esto es permanente.
+welcome-clamav = Análisis de virus
+welcome-finish = Listo
+welcome-heading = Configurar las actualizaciones
+welcome-notifications = Notificaciones
+welcome-root-warning = La instalación desatendida necesita permisos de administrador, así que la ejecución programada se instala como un servicio del sistema que corre como root. Nada más en esta aplicación se ejecuta como root.

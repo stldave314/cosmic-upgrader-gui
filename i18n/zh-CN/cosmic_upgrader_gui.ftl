@@ -276,3 +276,29 @@ dependencies-missing-required = { $count ->
    *[other] 缺少 { $count } 个必需的工具。
 }
 releases-channel-description = 候选发布版和测试版是否算作更新。
+
+## Welcome, notifications and virus scanning
+
+clamav-clean = 扫描完成：已检查 { $scanned } 个文件，未发现问题。
+clamav-failed = 无法执行扫描：{ $message }
+clamav-infected = 扫描完成：发现 { $infected } 个受感染文件。
+clamav-options = 扫描选项
+clamav-scan = 病毒库更新后进行扫描
+clamav-scan-description = 已安装 ClamAV。topgrade 会保持其病毒库为最新；病毒库一旦更新，此项就用新库进行扫描。
+clamav-scanning = 病毒库已更新 — 正在扫描…
+clamav-target = 扫描范围
+nav-welcome = 欢迎
+notify-errors = 升级失败时通知我
+notify-errors-description = 即使关闭了其他通知，失败仍会被通知，除非此项也被关闭。
+notify-title-available = 有可用的升级
+notify-title-installed = 升级已安装
+notify-upgrades = 通知我升级情况
+notify-upgrades-available = 将告知您有哪些可供安装。
+notify-upgrades-installed = 将告知您安装了什么。
+welcome-automatic-heading = 安装升级
+welcome-body = 现在值得做的几项选择。之后都可在设置中找到，且没有任何一项是不可更改的。
+welcome-clamav = 病毒扫描
+welcome-finish = 完成
+welcome-heading = 设置升级
+welcome-notifications = 通知
+welcome-root-warning = 无人值守安装需要管理员权限，因此计划运行将作为以 root 身份运行的系统服务安装。此应用程序的其他部分都不会以 root 运行。

@@ -16,6 +16,7 @@
 #   ./install.sh packages   deb + rpm + tarball
 #   ./install.sh hooks      Install the repository's git hooks
 #   ./install.sh check      cargo check, clippy and the test suite
+#   ./install.sh update     Update dependencies, then verify the result builds
 #
 # Set BUNDLE_TOPGRADE=1 to build a copy of topgrade into the package for
 # systems that have none of their own.
@@ -70,6 +71,34 @@ build_bundled_topgrade() {
     info "Building bundled topgrade into $out"
     cargo install topgrade --root "$out" --locked --force
     [ -x "$out/bin/topgrade" ] || die "bundled topgrade was not produced"
+}
+
+# Bring dependencies up to date and prove the result still builds.
+#
+# Both halves matter. `cargo update` moves the lockfile within the constraints
+# in Cargo.toml; `cargo install-update` refreshes the packaging tools this
+# script drives, which are installed binaries rather than dependencies and so
+# are not covered by the lockfile at all. Neither is any use without the check
+# afterwards: a git dependency can pull in a breaking change under a version
+# that claims to be compatible.
+update_deps() {
+    require cargo
+
+    info "Updating the lockfile"
+    cargo update
+
+    if command -v cargo-install-update >/dev/null 2>&1; then
+        info "Updating the packaging tools"
+        # Only the tools this script actually uses, rather than everything the
+        # user happens to have installed.
+        cargo install-update cargo-deb cargo-generate-rpm || true
+    else
+        info "cargo-install-update not present; skipping the packaging tools"
+        info "  install it with: cargo install cargo-update"
+    fi
+
+    info "Verifying the result"
+    check
 }
 
 check() {
@@ -256,6 +285,7 @@ case "${1:-build}" in
     packages)  deb; rpm; tarball ;;
     hooks)     hooks ;;
     check)     check ;;
+    update)    update_deps ;;
     locales)   check_locales ;;
-    *)         die "unknown target '${1}'. Try: build install uninstall deb rpm tarball packages hooks check" ;;
+    *)         die "unknown target '${1}'. Try: build install uninstall deb rpm tarball packages hooks check update" ;;
 esac

@@ -278,3 +278,29 @@ dependencies-missing-required = { $count ->
    *[other] { $count } outils requis sont manquants.
 }
 releases-channel-description = Si les préversions et les bêtas comptent comme des mises à jour.
+
+## Welcome, notifications and virus scanning
+
+clamav-clean = Analyse terminée : { $scanned } fichiers vérifiés, rien trouvé.
+clamav-failed = L'analyse n'a pas pu être lancée : { $message }
+clamav-infected = Analyse terminée : { $infected } fichier(s) infecté(s).
+clamav-options = Options d'analyse
+clamav-scan = Analyser après la mise à jour de la base antivirale
+clamav-scan-description = ClamAV est installé. topgrade tient sa base à jour ; ceci analyse avec la nouvelle base dès qu'elle change.
+clamav-scanning = La base antivirale a changé — analyse en cours…
+clamav-target = Ce qui est analysé
+nav-welcome = Bienvenue
+notify-errors = M'avertir en cas d'échec d'une mise à niveau
+notify-errors-description = Les échecs sont signalés même si les autres notifications sont désactivées, sauf si ceci l'est aussi.
+notify-title-available = Des mises à niveau sont disponibles
+notify-title-installed = Mises à niveau installées
+notify-upgrades = M'informer des mises à niveau
+notify-upgrades-available = On vous dira ce qui est disponible à installer.
+notify-upgrades-installed = On vous dira ce qui a été installé.
+welcome-automatic-heading = Installation des mises à niveau
+welcome-body = Quelques choix à faire maintenant. Ils sont tous dans les Paramètres ensuite, et rien n'est définitif.
+welcome-clamav = Analyse antivirus
+welcome-finish = Terminé
+welcome-heading = Configurer les mises à niveau
+welcome-notifications = Notifications
+welcome-root-warning = Une installation sans surveillance nécessite les droits d'administrateur, l'exécution planifiée est donc installée comme service système s'exécutant en root. Rien d'autre dans cette application ne s'exécute en root.

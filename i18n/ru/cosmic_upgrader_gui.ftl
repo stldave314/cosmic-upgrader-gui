@@ -282,3 +282,29 @@ dependencies-missing-required = { $count ->
    *[other] Отсутствует { $count } необходимого инструмента.
 }
 releases-channel-description = Считать ли предварительные выпуски и бета-версии обновлениями.
+
+## Welcome, notifications and virus scanning
+
+clamav-clean = Проверка завершена: проверено файлов — { $scanned }, ничего не найдено.
+clamav-failed = Не удалось выполнить проверку: { $message }
+clamav-infected = Проверка завершена: заражённых файлов — { $infected }.
+clamav-options = Параметры проверки
+clamav-scan = Проверять после обновления базы вирусов
+clamav-scan-description = ClamAV установлен. topgrade поддерживает его базу в актуальном состоянии; это выполняет проверку новой базой, как только она изменится.
+clamav-scanning = База вирусов изменилась — идёт проверка…
+clamav-target = Что проверять
+nav-welcome = Добро пожаловать
+notify-errors = Сообщать о неудачных обновлениях
+notify-errors-description = Об ошибках сообщается даже при выключенных прочих уведомлениях, если только не выключить и это.
+notify-title-available = Доступны обновления
+notify-title-installed = Обновления установлены
+notify-upgrades = Сообщать об обновлениях
+notify-upgrades-available = Вам сообщат, что доступно для установки.
+notify-upgrades-installed = Вам сообщат, что было установлено.
+welcome-automatic-heading = Установка обновлений
+welcome-body = Несколько решений, которые стоит принять сейчас. Все они потом есть в параметрах, и ничего необратимого здесь нет.
+welcome-clamav = Проверка на вирусы
+welcome-finish = Готово
+welcome-heading = Настройка обновлений
+welcome-notifications = Уведомления
+welcome-root-warning = Установка без присмотра требует прав администратора, поэтому запуск по расписанию устанавливается как системная служба, работающая от root. Ничто другое в этом приложении от root не работает.

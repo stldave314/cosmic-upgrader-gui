@@ -278,3 +278,29 @@ dependencies-missing-required = { $count ->
    *[other] { $count } benötigte Werkzeuge fehlen.
 }
 releases-channel-description = Ob Veröffentlichungskandidaten und Betas als Aktualisierungen gelten.
+
+## Welcome, notifications and virus scanning
+
+clamav-clean = Prüfung beendet: { $scanned } Dateien geprüft, nichts gefunden.
+clamav-failed = Die Prüfung konnte nicht ausgeführt werden: { $message }
+clamav-infected = Prüfung beendet: { $infected } infizierte Datei(en) gefunden.
+clamav-options = Prüfoptionen
+clamav-scan = Nach Aktualisierung der Virendatenbank prüfen
+clamav-scan-description = ClamAV ist installiert. topgrade hält die Datenbank aktuell; dies prüft mit der neuen Datenbank, sobald sie sich ändert.
+clamav-scanning = Virendatenbank geändert — Prüfung läuft …
+clamav-target = Was geprüft wird
+nav-welcome = Willkommen
+notify-errors = Bei fehlgeschlagener Aktualisierung benachrichtigen
+notify-errors-description = Fehlschläge werden auch dann gemeldet, wenn andere Benachrichtigungen aus sind — es sei denn, dies wird ebenfalls ausgeschaltet.
+notify-title-available = Aktualisierungen sind verfügbar
+notify-title-installed = Aktualisierungen installiert
+notify-upgrades = Über Aktualisierungen informieren
+notify-upgrades-available = Sie werden erfahren, was installiert werden kann.
+notify-upgrades-installed = Sie werden erfahren, was installiert wurde.
+welcome-automatic-heading = Aktualisierungen installieren
+welcome-body = Ein paar Entscheidungen, die jetzt sinnvoll sind. Alle finden sich danach in den Einstellungen, und nichts davon ist endgültig.
+welcome-clamav = Virenprüfung
+welcome-finish = Fertig
+welcome-heading = Aktualisierungen einrichten
+welcome-notifications = Benachrichtigungen
+welcome-root-warning = Unbeaufsichtigtes Installieren erfordert Administratorrechte, daher wird die geplante Ausführung als Systemdienst mit Root-Rechten eingerichtet. Nichts anderes in dieser Anwendung läuft als Root.

@@ -16,7 +16,7 @@ use cosmic::{
 use serde::{Deserialize, Serialize};
 
 use crate::constants::DEFAULT_KEEP_RUNS;
-use crate::constants::APPIMAGE_SEARCH_DIRS;
+use crate::constants::{APPIMAGE_SEARCH_DIRS, CLAMSCAN_DEFAULT_OPTIONS, CLAMSCAN_DEFAULT_TARGET};
 use crate::releases::{Channel, CheckInterval, Watch};
 use crate::schedule::Schedule;
 
@@ -87,8 +87,24 @@ pub struct Config {
     /// and burying the dozen that apply under them is the main thing that makes
     /// topgrade's own step list hard to work with.
     pub show_unavailable_steps: bool,
-    /// Post a desktop notification when a scheduled run finishes.
-    pub notify_on_completion: bool,
+    /// Say something when upgrades are found or installed.
+    ///
+    /// What it says depends on what the schedule does: a run that installs
+    /// reports what it installed, one that only checks reports what is
+    /// available. Both are the same wish — "tell me about upgrades" — so they
+    /// are one setting rather than two the user has to keep consistent.
+    pub notify_upgrades: bool,
+    /// Say something when an upgrade fails.
+    ///
+    /// Separate, and on by default, because a failure is the one thing worth
+    /// interrupting somebody for. Turning it off is possible but deliberate.
+    pub notify_errors: bool,
+    /// Run a virus scan after the ClamAV database changes.
+    pub clamav_scan: bool,
+    /// Options handed to `clamscan`.
+    pub clamscan_options: String,
+    /// What the scan looks at.
+    pub clamscan_target: String,
     /// When upgrades run unattended.
     pub schedule: Schedule,
     /// Keep running in the background when the window is closed, with an icon
@@ -145,7 +161,11 @@ impl Default for Config {
             confirm_before_running: true,
             assume_yes: true,
             show_unavailable_steps: false,
-            notify_on_completion: true,
+            notify_upgrades: true,
+            notify_errors: true,
+            clamav_scan: false,
+            clamscan_options: CLAMSCAN_DEFAULT_OPTIONS.to_owned(),
+            clamscan_target: CLAMSCAN_DEFAULT_TARGET.to_owned(),
             minimize_to_tray: false,
             show_tray_icon: false,
             first_run_completed: false,
