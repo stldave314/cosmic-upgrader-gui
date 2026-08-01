@@ -32,6 +32,11 @@
   </developer>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.5.2" date="2026-07-31">
+      <description>
+        <p>fix: make the per-category settings button findable, and land on the asked-for page</p>
+      </description>
+    </release>
     <release version="0.5.1" date="2026-07-31">
       <description>
         <p>fix: stale Update button, plus release updates in runs and a monochrome tray icon</p>

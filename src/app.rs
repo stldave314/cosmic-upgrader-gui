@@ -413,6 +413,14 @@ struct Run {
 pub struct App {
     /// Where to restart from; see [`Flags::executable`].
     executable: Option<PathBuf>,
+    /// The page asked for on the command line, held until there is a sidebar
+    /// with that page in it.
+    ///
+    /// The category entries do not exist until topgrade has been asked what it
+    /// can do, so activating one at startup would find nothing and silently fall
+    /// back to the first entry — which is what happened to a restart that had
+    /// been on a category page.
+    pending_page: Option<Page>,
     core: Core,
     config: Config,
     config_handler: Option<cosmic_config::Config>,
@@ -800,6 +808,7 @@ impl Application for App {
     fn init(core: Core, flags: Self::Flags) -> (Self, Task<Self::Message>) {
         let mut app = App {
             executable: flags.executable.clone(),
+            pending_page: flags.start_page.clone(),
             core,
             config: flags.config,
             config_handler: flags.config_handler,
@@ -1060,6 +1069,12 @@ impl Application for App {
                             changing_source: None,
                         }));
                         self.rebuild_nav();
+
+                        // Now that the sidebar has every page in it, the one
+                        // handed over by a restart can be selected.
+                        if let Some(page) = self.pending_page.take() {
+                            self.activate(&page);
+                        }
 
                         let scan = self.start_scan();
 
@@ -2615,21 +2630,33 @@ impl App {
                 .filter_map(|name| ready.schema.section(name))
                 .collect();
 
+        let open = ready.category_settings.contains(&category);
+
+        // The title takes the whole row so the button sits against the right
+        // edge. As a bare icon tucked against the heading it read as decoration
+        // — a labelled button at the end of the row is somewhere the eye
+        // already goes looking for an action.
         let mut heading = widget::row::with_children(Vec::new())
             .spacing(8)
             .align_y(Alignment::Center)
-            .push(widget::text::title2(category.label()));
+            .push(widget::text::title2(category.label()).width(Length::Fill));
 
         if !sections.is_empty() {
-            heading = heading.push(
-                widget::tooltip(
-                    widget::button::icon(widget::icon::from_name("emblem-system-symbolic"))
-                        .on_press(Message::ToggleCategorySettings(category))
-                        .padding(6),
-                    widget::text(fl!("category-settings")),
-                    widget::tooltip::Position::Bottom,
-                ),
-            );
+            // Filled while the panel is open, so the button says which state it
+            // is in rather than only what pressing it does.
+            let button = if open {
+                widget::button::suggested(fl!("settings"))
+            } else {
+                widget::button::standard(fl!("settings"))
+            };
+
+            heading = heading.push(widget::tooltip(
+                button
+                    .leading_icon(widget::icon::from_name("emblem-system-symbolic"))
+                    .on_press(Message::ToggleCategorySettings(category)),
+                widget::text(fl!("category-settings")),
+                widget::tooltip::Position::Left,
+            ));
         }
 
         let mut column = widget::column::with_children(Vec::new())
@@ -2650,7 +2677,7 @@ impl App {
 
         // The same controls as the configuration page, shown where the steps
         // they affect are, rather than only on a page of their own.
-        if ready.category_settings.contains(&category) {
+        if open {
             for section in &sections {
                 column = column.push(self.view_section(ready, section));
             }

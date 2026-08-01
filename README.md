@@ -75,9 +75,11 @@ managers; `vim` reports four. Those are shown as components under the step.
 ![A category page, with per-step toggles and the settings gear](docs/steps.png)
 
 Unavailable steps are hidden by default — on a typical system they are most of
-the list. The gear beside the heading opens the topgrade settings belonging to
-that category, so `[cargo]` and `[rustup]` are reachable from Development rather
-than by hunting down a long configuration page.
+the list. **Settings** at the right of the heading opens the topgrade settings
+belonging to that category, so `[cargo]` and `[rustup]` are reachable from
+Development rather than by hunting down a long configuration page. It fills in
+while the panel is open, so the button says which state it is in rather than
+only what pressing it does.
 
 ## Features
 
