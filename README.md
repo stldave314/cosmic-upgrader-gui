@@ -143,6 +143,19 @@ where there is no file to find and nothing installed to read, still gets update
 notices. It has no "stop watching" button, because that is not a thing to turn
 off.
 
+When it updates *itself*, the binary that is running is now the old one, so it
+restarts. That is done with `exec`, which replaces this process rather than
+starting a second one — which matters, because the application is
+single-instance and a freshly spawned copy would hand off to the very process it
+was meant to replace and then exit, leaving the old version running. The page
+you were on is passed to the new process as `--page`, so you land back where you
+were. It will not restart while an upgrade is running, since replacing the
+process would take topgrade down with it.
+
+The path to re-run is captured at startup rather than when needed: once the file
+has been replaced, `/proc/self/exe` names a deleted inode and is no longer
+something that can be run.
+
 ### Where the projects come from
 
 Nothing is guessed at from the network. Candidates are derived from what the

@@ -325,3 +325,7 @@ sources-url-placeholder = URL
 show-tray-icon-description = Traz a janela para a frente, inicia uma atualização sem abri-la e sai. Não pode ocultar a janela: o Wayland não oferece como desfazer isso.
 welcome-show-again = Tela de configuração
 welcome-show-again-description = Voltar à primeira tela e às suas escolhas.
+
+releases-restart-failed = Não foi possível iniciar a nova versão: { $message }
+releases-restart-unknown-path = a localização deste aplicativo não é conhecida
+releases-restarting = Atualizado — reiniciando na nova versão…

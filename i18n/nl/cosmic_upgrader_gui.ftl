@@ -325,3 +325,7 @@ sources-url-placeholder = URL
 show-tray-icon-description = Haalt het venster naar voren, start een opwaardering zonder het te openen, en sluit af. Het kan het venster niet verbergen — Wayland biedt geen manier om dat ongedaan te maken.
 welcome-show-again = Instelscherm
 welcome-show-again-description = Terug naar het eerste scherm en zijn keuzes.
+
+releases-restart-failed = De nieuwe versie kon niet worden gestart: { $message }
+releases-restart-unknown-path = de eigen locatie van deze toepassing is niet bekend
+releases-restarting = Bijgewerkt — bezig met herstarten in de nieuwe versie…

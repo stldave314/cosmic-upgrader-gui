@@ -323,3 +323,7 @@ sources-url-placeholder = 网址
 show-tray-icon-description = 将窗口置前、不打开窗口即开始升级，以及退出。它无法隐藏窗口 — Wayland 没有撤销该操作的方法。
 welcome-show-again = 设置页面
 welcome-show-again-description = 回到第一个页面及其选项。
+
+releases-restart-failed = 无法启动新版本：{ $message }
+releases-restart-unknown-path = 不知道此应用程序自身的位置
+releases-restarting = 已更新 — 正在重启到新版本…

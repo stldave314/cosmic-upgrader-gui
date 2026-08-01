@@ -32,6 +32,11 @@
   </developer>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.5.0" date="2026-07-31">
+      <description>
+        <p>feat: restart into the new version, on the same page, after updating itself</p>
+      </description>
+    </release>
     <release version="0.4.1" date="2026-07-31">
       <description>
         <p>fix: remove hide-to-tray, which cannot work, and add a way back to the first screen</p>

@@ -325,3 +325,7 @@ sources-url-placeholder = URL
 show-tray-icon-description = Porta in primo piano la finestra, avvia un aggiornamento senza aprirla ed esce. Non può nascondere la finestra: Wayland non offre modo di annullarlo.
 welcome-show-again = Schermata di configurazione
 welcome-show-again-description = Torna alla prima schermata e alle sue scelte.
+
+releases-restart-failed = Non è stato possibile avviare la nuova versione: { $message }
+releases-restart-unknown-path = la posizione di questa applicazione non è nota
+releases-restarting = Aggiornato — riavvio nella nuova versione…

@@ -323,3 +323,7 @@ sources-url-placeholder = URL
 show-tray-icon-description = ウィンドウを前面に出し、開かずに更新を開始し、終了します。ウィンドウを隠すことはできません — Wayland にはそれを元に戻す手段がありません。
 welcome-show-again = 設定画面
 welcome-show-again-description = 最初の画面とその選択に戻ります。
+
+releases-restart-failed = 新しいバージョンを起動できませんでした: { $message }
+releases-restart-unknown-path = このアプリケーション自身の場所が分かりません
+releases-restarting = 更新しました — 新しいバージョンで再起動しています…

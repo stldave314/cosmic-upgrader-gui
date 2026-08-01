@@ -65,6 +65,31 @@ impl Category {
         Self::Other,
     ];
 
+    /// A stable name for this category, used when one process hands a page to
+    /// its successor across a restart. Not localized: it is written by this
+    /// application and read back by the next copy of it, never by a person.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::System => "system",
+            Self::Applications => "applications",
+            Self::Containers => "containers",
+            Self::Development => "development",
+            Self::Editors => "editors",
+            Self::Repositories => "repositories",
+            Self::Shell => "shell",
+            Self::AiTools => "ai-tools",
+            Self::Cloud => "cloud",
+            Self::Desktop => "desktop",
+            Self::Custom => "custom",
+            Self::Other => "other",
+        }
+    }
+
+    /// Read back what [`as_str`](Self::as_str) wrote.
+    pub fn parse(name: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|category| category.as_str() == name)
+    }
+
     /// Localized heading.
     pub fn label(self) -> String {
         match self {
@@ -221,6 +246,29 @@ pub fn group(steps: &[StepId]) -> BTreeMap<Category, Vec<StepId>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_category_name_survives_a_round_trip() {
+        // A restart hands the current page to the new process as text; a name
+        // that did not read back would land somewhere else.
+        for category in Category::ALL {
+            assert_eq!(Category::parse(category.as_str()), Some(category));
+        }
+    }
+
+    #[test]
+    fn category_names_are_distinct() {
+        let mut names: Vec<&str> = Category::ALL.iter().map(|c| c.as_str()).collect();
+        names.sort();
+        let distinct = names.len();
+        names.dedup();
+        assert_eq!(names.len(), distinct);
+    }
+
+    #[test]
+    fn an_unknown_category_name_is_declined() {
+        assert_eq!(Category::parse("nonsense"), None);
+    }
 
     #[test]
     fn a_category_with_settings_names_them() {

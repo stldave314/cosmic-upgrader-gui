@@ -329,3 +329,7 @@ sources-url-placeholder = Адрес
 show-tray-icon-description = Поднимает окно, запускает обновление, не открывая его, и завершает работу. Скрыть окно он не может — в Wayland нет способа это отменить.
 welcome-show-again = Экран настройки
 welcome-show-again-description = Вернуться к первому экрану и его вопросам.
+
+releases-restart-failed = Не удалось запустить новую версию: { $message }
+releases-restart-unknown-path = расположение самого приложения неизвестно
+releases-restarting = Обновлено — перезапуск в новую версию…

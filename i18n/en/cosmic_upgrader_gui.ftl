@@ -339,3 +339,6 @@ sources-changing = Applying…
 show-tray-icon-description = Raises the window, starts an upgrade without opening it, and quits. It cannot hide the window — Wayland gives no way to undo that.
 welcome-show-again = Set-up screen
 welcome-show-again-description = Go back to the first screen and its choices.
+releases-restarting = Updated — restarting into the new version…
+releases-restart-failed = The new version could not be started: { $message }
+releases-restart-unknown-path = this application's own location is not known

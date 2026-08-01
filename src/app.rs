@@ -3,6 +3,7 @@
 //! The window: what is shown, and what happens when it is used.
 
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use cosmic::app::{context_drawer, Core, Task};
@@ -88,6 +89,49 @@ pub enum Page {
     Configuration,
 }
 
+impl Page {
+    /// A stable name, so a restarting process can tell its successor where the
+    /// user was. Not localized: written and read only by this application.
+    pub fn as_str(&self) -> String {
+        match self {
+            Self::Welcome => "welcome".to_owned(),
+            Self::Overview => "overview".to_owned(),
+            Self::Steps(category) => format!("steps:{}", category.as_str()),
+            Self::Run => "run".to_owned(),
+            Self::Releases => "releases".to_owned(),
+            Self::Sources => "sources".to_owned(),
+            Self::History => "history".to_owned(),
+            Self::Dependencies => "dependencies".to_owned(),
+            Self::Schedule => "schedule".to_owned(),
+            Self::Configuration => "configuration".to_owned(),
+        }
+    }
+
+    /// Read back what [`as_str`](Self::as_str) wrote.
+    ///
+    /// An unrecognised name yields `None` rather than a guess: a page that has
+    /// been renamed or removed between versions should land on the default
+    /// rather than somewhere arbitrary, and a restart across an upgrade is
+    /// exactly when that happens.
+    pub fn parse(name: &str) -> Option<Self> {
+        if let Some(category) = name.strip_prefix("steps:") {
+            return Category::parse(category).map(Self::Steps);
+        }
+        Some(match name {
+            "welcome" => Self::Welcome,
+            "overview" => Self::Overview,
+            "run" => Self::Run,
+            "releases" => Self::Releases,
+            "sources" => Self::Sources,
+            "history" => Self::History,
+            "dependencies" => Self::Dependencies,
+            "schedule" => Self::Schedule,
+            "configuration" => Self::Configuration,
+            _ => return None,
+        })
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ContextPage {
     Settings,
@@ -106,6 +150,15 @@ pub enum DialogPage {
 pub struct Flags {
     pub config_handler: Option<cosmic_config::Config>,
     pub config: Config,
+    /// The page to open on, when a previous copy of this application asked for
+    /// one before restarting itself into a new version.
+    pub start_page: Option<Page>,
+    /// This binary's own path, captured before anything can replace it.
+    ///
+    /// Taken at startup rather than when needed: after the file has been
+    /// replaced by an upgrade, `/proc/self/exe` refers to the old, now-deleted
+    /// inode, and the path it reports is no longer one that can be run.
+    pub executable: Option<PathBuf>,
 }
 
 #[derive(Clone, Debug)]
@@ -189,6 +242,8 @@ pub enum Message {
 
     FinishWelcome,
     ShowWelcome,
+    RestartUpdated,
+    RestartFailed(String),
     ConfigNotifyUpgrades(bool),
     ConfigNotifyErrors(bool),
     ConfigClamavScan(bool),
@@ -343,6 +398,8 @@ struct Run {
 }
 
 pub struct App {
+    /// Where to restart from; see [`Flags::executable`].
+    executable: Option<PathBuf>,
     core: Core,
     config: Config,
     config_handler: Option<cosmic_config::Config>,
@@ -690,6 +747,7 @@ impl Application for App {
 
     fn init(core: Core, flags: Self::Flags) -> (Self, Task<Self::Message>) {
         let mut app = App {
+            executable: flags.executable.clone(),
             core,
             config: flags.config,
             config_handler: flags.config_handler,
@@ -724,6 +782,12 @@ impl Application for App {
 
         app.set_header_title(fl!("app-title"));
         app.rebuild_nav();
+
+        // Handed over by the copy that restarted itself into this one, so an
+        // update lands the user back where they were rather than at the front.
+        if let Some(page) = flags.start_page.clone() {
+            app.activate(&page);
+        }
 
         // Registering the item is a D-Bus round trip, so it happens alongside
         // discovery rather than delaying the window.
@@ -1681,13 +1745,19 @@ impl Application for App {
                 };
                 let key = ready.installing.take();
 
+                let updated_self = key.as_deref() == releases::self_key().as_deref();
+
                 match *result {
                     Ok((name, version)) => {
-                        ready.status = Some(fl!(
-                            "releases-installed",
-                            name = name,
-                            version = version.clone()
-                        ));
+                        ready.status = Some(if updated_self {
+                            fl!("releases-restarting")
+                        } else {
+                            fl!(
+                                "releases-installed",
+                                name = name,
+                                version = version.clone()
+                            )
+                        });
                         // The recorded version moves forward so the entry stops
                         // reporting an update it has already applied.
                         if let Some(key) = key {
@@ -1708,6 +1778,24 @@ impl Application for App {
                             name = String::new(),
                             message = message
                         ));
+                        return Task::none();
+                    }
+                }
+
+                // The binary that is running is now the old one. Restarting is
+                // the only way to be using what was just installed, and doing it
+                // here — rather than leaving the user to notice — is the point
+                // of updating in place.
+                if updated_self {
+                    // Not while an upgrade is running: replacing this process
+                    // would take topgrade down with it, halfway through whatever
+                    // it was doing.
+                    let busy = self
+                        .run
+                        .as_ref()
+                        .is_some_and(|run| run.outcome.is_none());
+                    if !busy {
+                        return cosmic::task::message(Message::RestartUpdated);
                     }
                 }
                 Task::none()
@@ -1837,6 +1925,46 @@ impl Application for App {
                 } else {
                     &Page::Overview
                 });
+                Task::none()
+            }
+
+            Message::RestartUpdated => {
+                let Some(executable) = self.executable.clone() else {
+                    return cosmic::task::message(Message::RestartFailed(
+                        fl!("releases-restart-unknown-path"),
+                    ));
+                };
+                let page = self.page().as_str();
+                let tray = self.tray.take();
+                debug_log!(UI, "restarting into {} on page {page}", executable.display());
+
+                cosmic::task::future(async move {
+                    // Removed first so the icon does not linger while the
+                    // process image is being replaced.
+                    if let Some(tray) = tray {
+                        tray.shutdown().await;
+                    }
+
+                    // `exec` replaces this process rather than starting a second
+                    // one. That matters: this application is single-instance, so
+                    // a freshly spawned copy would hand off to the very process
+                    // it was meant to replace and then exit, leaving the old
+                    // version running.
+                    use std::os::unix::process::CommandExt;
+                    let error = std::process::Command::new(&executable)
+                        .arg("--page")
+                        .arg(&page)
+                        .exec();
+
+                    // Only reached if the replacement failed.
+                    Message::RestartFailed(error.to_string())
+                })
+            }
+
+            Message::RestartFailed(message) => {
+                if let Some(ready) = self.ready_mut() {
+                    ready.status = Some(fl!("releases-restart-failed", message = message));
+                }
                 Task::none()
             }
 
@@ -3789,6 +3917,62 @@ mod tests {
     /// position alone, so the position as a fraction of the content falls even
     /// though nobody touched anything. This is the case that breaks a naive
     /// "is the fraction near 1.0?" test, and it happens on every line.
+    /// Every page, including one of the parameterised ones.
+    fn every_page() -> Vec<Page> {
+        let mut pages = vec![
+            Page::Welcome,
+            Page::Overview,
+            Page::Run,
+            Page::Releases,
+            Page::Sources,
+            Page::History,
+            Page::Dependencies,
+            Page::Schedule,
+            Page::Configuration,
+        ];
+        pages.extend(Category::ALL.into_iter().map(Page::Steps));
+        pages
+    }
+
+    #[test]
+    fn a_page_survives_being_handed_to_a_restarted_process() {
+        // This is how an update keeps the user where they were: the name is
+        // written to a command line and read back by the new binary.
+        for page in every_page() {
+            assert_eq!(Page::parse(&page.as_str()), Some(page.clone()), "{page:?}");
+        }
+    }
+
+    #[test]
+    fn page_names_are_distinct() {
+        let mut names: Vec<String> = every_page().iter().map(Page::as_str).collect();
+        names.sort();
+        let distinct = names.len();
+        names.dedup();
+        assert_eq!(names.len(), distinct, "two pages share a name");
+    }
+
+    #[test]
+    fn page_names_are_safe_on_a_command_line() {
+        // They are passed as an argument to the new process.
+        for page in every_page() {
+            let name = page.as_str();
+            assert!(
+                name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == ':'),
+                "{name:?} is not a plain argument"
+            );
+        }
+    }
+
+    #[test]
+    fn a_page_that_no_longer_exists_falls_back_rather_than_guessing() {
+        // A restart happens across an upgrade, which is exactly when a page may
+        // have been renamed or removed.
+        assert_eq!(Page::parse("a-page-from-a-later-version"), None);
+        assert_eq!(Page::parse("steps:not-a-category"), None);
+        assert_eq!(Page::parse(""), None);
+    }
+
     #[test]
     fn output_arriving_does_not_stop_the_log_following() {
         let still_following = should_follow_log(true, 0.94, 1_000.0, 1_000.0);

@@ -63,8 +63,33 @@ fn main() -> cosmic::iced::Result {
         Flags {
             config_handler,
             config,
+            start_page: start_page(),
+            // Captured now, before an update can replace the file: once it has,
+            // `/proc/self/exe` names a deleted inode and is no longer runnable.
+            executable: std::env::current_exe().ok(),
         },
     )
+}
+
+/// The page to open on, from `--page <name>`.
+///
+/// Written by a previous copy of this application when it restarted itself into
+/// a new version, so the user lands back where they were. Not a documented
+/// interface for anyone else, which is why an unrecognised name is ignored
+/// rather than being an error worth refusing to start over.
+fn start_page() -> Option<app::Page> {
+    let mut args = std::env::args().skip(1);
+    while let Some(argument) = args.next() {
+        let value = match argument.strip_prefix("--page=") {
+            Some(value) => Some(value.to_owned()),
+            None if argument == "--page" => args.next(),
+            None => None,
+        };
+        if let Some(value) = value {
+            return app::Page::parse(&value);
+        }
+    }
+    None
 }
 
 /// What a scheduled invocation was asked to do.
