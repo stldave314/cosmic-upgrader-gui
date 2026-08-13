@@ -14,6 +14,26 @@
 //! in a terminal window, and this module sits on the other end reading what it
 //! writes and typing back when asked.
 //!
+//! ## Questions
+//!
+//! A password is not the only thing a step can stop and ask for. `fwupdmgr`
+//! finishes a firmware update with "An update requires a reboot to complete.
+//! Restart now?" and waits; other tools ask whether to continue. All of them
+//! write the question without a trailing newline — that is how the cursor ends
+//! up after it — so it never becomes a complete line, and a reader that only
+//! reports complete lines shows nothing at all. The run simply stops, with no
+//! output and no explanation.
+//!
+//! Two things catch that here. A question that ends in a `[y/N]`-style hint is
+//! recognised the moment it arrives, since nothing else looks like one. A
+//! question that does not — `fwupdmgr`'s is translated, and prints no hint —
+//! cannot be told apart from a line a step is still writing, so it is caught by
+//! the silence that follows it: an unfinished question that nothing has added
+//! to for [`STALLED_QUESTION_SECONDS`] is one that is waiting for an answer.
+//!
+//! Either way it becomes a [`Event::QuestionAsked`], the interface asks the
+//! user, and [`Handle::send_answer`] types the reply back.
+//!
 //! ## Privileges
 //!
 //! The `system` step runs the distribution's package manager under `sudo`,
@@ -38,6 +58,7 @@
 
 use std::io::{Read, Write};
 use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
 
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use tokio::sync::mpsc;
@@ -46,7 +67,8 @@ use super::discover::StepId;
 use super::probe::{parse_summary_line, Component, Status};
 use super::Topgrade;
 use crate::constants::{
-    PASSWORD_PROMPT_MARKERS, PTY_COLS, PTY_ROWS, SUMMARY_HEADING,
+    PASSWORD_PROMPT_MARKERS, PTY_COLS, PTY_ROWS, STALLED_QUESTION_SECONDS, STALL_POLL_SECONDS,
+    SUMMARY_HEADING, YES_NO_HINTS,
 };
 use crate::debug::RUN;
 use crate::debug_log;
@@ -110,6 +132,13 @@ pub enum Event {
     /// Something is asking for a password, and the run is stopped until one is
     /// sent back through [`Handle::send_password`].
     PasswordRequested { prompt: String },
+    /// Something is asking a yes/no question, and the run is stopped until
+    /// [`Handle::send_answer`] replies.
+    ///
+    /// The prompt carries the line before the question as well, because that is
+    /// where the program puts the reason: on its own, "Restart now?" does not
+    /// say that a firmware update is what wants the restart.
+    QuestionAsked { prompt: String },
     /// The run ended.
     Finished(Outcome),
 }
@@ -160,19 +189,38 @@ impl Handle {
         self.events.recv().await
     }
 
-    /// Answer a [`PasswordRequested`](Event::PasswordRequested).
+    /// Type a line into the pseudo-terminal.
     ///
-    /// The newline matters: `sudo` reads a line, and without it the password
-    /// sits in the terminal's buffer and the run stays stopped.
-    pub fn send_password(&self, password: &str) {
+    /// The newline matters: whatever is waiting reads a line, and without it the
+    /// reply sits in the terminal's buffer and the run stays stopped.
+    fn send_line(&self, line: &str) -> bool {
         let Ok(mut writer) = self.writer.lock() else {
-            return;
+            return false;
         };
-        if let Err(error) = writeln!(writer, "{password}") {
-            debug_log!(RUN, "could not send password: {error}");
+        if let Err(error) = writeln!(writer, "{line}") {
+            debug_log!(RUN, "could not reply: {error}");
+            return false;
         }
         let _ = writer.flush();
-        debug_log!(RUN, "password sent");
+        true
+    }
+
+    /// Answer a [`PasswordRequested`](Event::PasswordRequested).
+    pub fn send_password(&self, password: &str) {
+        if self.send_line(password) {
+            // Deliberately not logged: the debug log is a file, and a password
+            // is not something to leave in one.
+            debug_log!(RUN, "password sent");
+        }
+    }
+
+    /// Answer a [`QuestionAsked`](Event::QuestionAsked) with
+    /// [`ANSWER_YES`](crate::constants::ANSWER_YES) or
+    /// [`ANSWER_NO`](crate::constants::ANSWER_NO).
+    pub fn send_answer(&self, answer: &str) {
+        if self.send_line(answer) {
+            debug_log!(RUN, "answered {answer:?}");
+        }
     }
 
     /// Stop the run.
@@ -234,13 +282,31 @@ pub fn start(topgrade: &Topgrade, options: &Options) -> std::io::Result<Handle> 
     let (events, receiver) = mpsc::unbounded_channel();
     let child = Arc::new(Mutex::new(child));
 
+    let stall = Arc::new(Mutex::new(Stall::default()));
+
     // Reading a pseudo-terminal is a blocking operation with no async
     // equivalent, so it gets a thread of its own rather than occupying one of
     // the runtime's workers indefinitely.
     let reader_child = Arc::clone(&child);
+    let reader_stall = Arc::clone(&stall);
+    let watchdog_events = events.clone();
     std::thread::Builder::new()
         .name("topgrade-reader".to_owned())
-        .spawn(move || read_output(reader, &events, &reader_child))?;
+        .spawn(move || read_output(reader, &events, &reader_child, &reader_stall))?;
+
+    // Noticing that output has stopped cannot be done by the thread that is
+    // blocked waiting for the next of it, so the watchdog gets its own. It ends
+    // itself once the reader marks the run finished.
+    std::thread::Builder::new()
+        .name("topgrade-watchdog".to_owned())
+        .spawn(move || {
+            watch_for_stalls(
+                &stall,
+                &watchdog_events,
+                Duration::from_secs(STALL_POLL_SECONDS),
+                Duration::from_secs(STALLED_QUESTION_SECONDS),
+            )
+        })?;
 
     Ok(Handle {
         events: receiver,
@@ -249,11 +315,48 @@ pub fn start(topgrade: &Topgrade, options: &Options) -> std::io::Result<Handle> 
     })
 }
 
+/// The unfinished line currently on screen, shared with the watchdog.
+///
+/// A question is only recognisable as one once nothing has been added to it for
+/// a while, and the thread doing the reading is blocked waiting for exactly
+/// that. So it leaves what it has here, and the watchdog watches it stop
+/// changing.
+#[derive(Default)]
+struct Stall {
+    /// What has been read since the last newline, with escapes removed.
+    partial: String,
+    /// The complete line before it — where a program puts the reason for the
+    /// question it is about to ask.
+    context: String,
+    /// Bumped whenever `partial` changes, so "unchanged for ten seconds" can be
+    /// told from "changed back to the same text".
+    generation: u64,
+    /// Whether this partial line has already been reported as a question.
+    reported: bool,
+    /// Set when the reader stops, to stand the watchdog down.
+    finished: bool,
+}
+
+impl Stall {
+    fn note(&mut self, partial: &str, context: &str) {
+        if self.partial == partial {
+            return;
+        }
+        self.partial.clear();
+        self.partial.push_str(partial);
+        self.context.clear();
+        self.context.push_str(context);
+        self.generation = self.generation.wrapping_add(1);
+        self.reported = false;
+    }
+}
+
 /// Consume the pseudo-terminal until the run ends, reporting as it goes.
 fn read_output(
     mut reader: Box<dyn Read + Send>,
     events: &mpsc::UnboundedSender<Event>,
     child: &Arc<Mutex<Box<dyn portable_pty::Child + Send + Sync>>>,
+    stall: &Arc<Mutex<Stall>>,
 ) {
     let mut buffer = [0u8; 4096];
     // Output arrives in arbitrary chunks, so a line can be split across reads
@@ -261,6 +364,9 @@ fn read_output(
     let mut pending = String::new();
     let mut transcript = String::new();
     let mut in_summary = false;
+    // The last complete line that said anything, kept because a question on the
+    // line after it is rarely self-explanatory.
+    let mut context = String::new();
 
     loop {
         let read = match reader.read(&mut buffer) {
@@ -290,11 +396,16 @@ fn read_output(
                 }
             }
 
+            if !line.trim().is_empty() {
+                context.clear();
+                context.push_str(line.trim());
+            }
+
             let _ = events.send(Event::Output(line));
         }
 
-        // A password prompt is written without a trailing newline — that is how
-        // it leaves the cursor after the colon — so it never becomes a complete
+        // A prompt is written without a trailing newline — that is how it
+        // leaves the cursor after the question — so it never becomes a complete
         // line and would be missed entirely by the loop above.
         if !pending.is_empty() {
             let partial = strip_ansi(&pending);
@@ -306,10 +417,31 @@ fn read_output(
                 // Cleared so the same prompt is not reported again on the next
                 // read; the reply arrives through the writer, not through here.
                 pending.clear();
+            } else if has_yes_no_hint(&partial) {
+                // A `[y/N]` is unmistakable, so this one needs no waiting.
+                let prompt = question_text(&context, &partial);
+                debug_log!(RUN, "question: {prompt:?}");
+                // Reported as output too, because clearing the buffer below is
+                // what stops it being asked twice, and without this the
+                // transcript would show the answer with no sign of what it
+                // answered. A question caught by the watchdog instead needs
+                // none of this: its text is still in the buffer, and arrives
+                // with the reply echoed after it.
+                let _ = events.send(Event::Output(last_line(&partial).to_owned()));
+                let _ = events.send(Event::QuestionAsked { prompt });
+                pending.clear();
             }
         }
 
+        if let Ok(mut stall) = stall.lock() {
+            stall.note(&strip_ansi(&pending), &context);
+        }
+
         let _ = in_summary;
+    }
+
+    if let Ok(mut stall) = stall.lock() {
+        stall.finished = true;
     }
 
     // Anything left without a trailing newline is still output worth showing.
@@ -344,19 +476,107 @@ fn read_output(
     }));
 }
 
+/// Report an unfinished question that nothing has added to for long enough that
+/// it can only be waiting for an answer.
+///
+/// The two durations are arguments rather than read from the constants so a
+/// test can drive the whole thing in milliseconds instead of waiting out the
+/// real ones.
+fn watch_for_stalls(
+    stall: &Arc<Mutex<Stall>>,
+    events: &mpsc::UnboundedSender<Event>,
+    poll: Duration,
+    long_enough: Duration,
+) {
+    // The partial line being waited on, and since when.
+    let mut watching: Option<(u64, Instant)> = None;
+
+    loop {
+        std::thread::sleep(poll);
+
+        let Ok(mut stall) = stall.lock() else {
+            return;
+        };
+        if stall.finished {
+            return;
+        }
+
+        if stall.reported || !looks_like_a_question(&stall.partial) {
+            watching = None;
+            continue;
+        }
+
+        match watching {
+            Some((generation, since)) if generation == stall.generation => {
+                if since.elapsed() < long_enough {
+                    continue;
+                }
+                let prompt = question_text(&stall.context, &stall.partial);
+                debug_log!(RUN, "stalled on a question: {prompt:?}");
+                stall.reported = true;
+                watching = None;
+                let _ = events.send(Event::QuestionAsked { prompt });
+            }
+            // Either nothing was being watched or the text changed, which means
+            // the step is still writing and the clock starts again.
+            _ => watching = Some((stall.generation, Instant::now())),
+        }
+    }
+}
+
+/// The last line of a partial read, which is the only one that can still be a
+/// prompt: earlier ones are output that has already been read past, and
+/// matching them would fire on a step that merely printed the word.
+fn last_line(partial: &str) -> &str {
+    let tail = partial.trim();
+    tail.lines().next_back().unwrap_or(tail)
+}
+
 /// Whether a partial line looks like something waiting for a password.
 fn is_password_prompt(partial: &str) -> bool {
-    let tail = partial.trim();
-    if tail.is_empty() {
+    let last = last_line(partial);
+    if last.is_empty() {
         return false;
     }
-    // Only the last line matters: earlier ones are output that has already been
-    // read past, and matching them would fire on a step that merely printed the
-    // word.
-    let last = tail.lines().next_back().unwrap_or(tail).to_ascii_lowercase();
+    let last = last.to_ascii_lowercase();
     PASSWORD_PROMPT_MARKERS
         .iter()
         .any(|marker| last.contains(marker))
+}
+
+/// Whether a partial line ends with the hint a program prints when it wants a
+/// yes or no answer.
+fn has_yes_no_hint(partial: &str) -> bool {
+    let last = last_line(partial).to_ascii_lowercase();
+    // What follows the hint varies — `[y|N]:`, `[y/n] `, `(y/n)?` — and none of
+    // it changes the question, so it is trimmed off before matching.
+    let tail = last.trim_end_matches([':', '?', ' ', '\t']);
+    YES_NO_HINTS.iter().any(|hint| tail.ends_with(hint))
+}
+
+/// Whether a partial line could be a question at all.
+///
+/// This is the gate on the watchdog, and it is deliberately narrow. A step that
+/// pauses for a minute in the middle of writing a progress line is not asking
+/// anything, and interrupting the user with a dialog about it would be worse
+/// than the stall this exists to prevent. A question mark, or a yes/no hint, is
+/// the smallest signal that survives translation.
+fn looks_like_a_question(partial: &str) -> bool {
+    last_line(partial).contains('?') || has_yes_no_hint(partial)
+}
+
+/// What to show the user, given the unfinished question and the line before it.
+///
+/// The two are joined because that is how they read: `fwupdmgr` prints "An
+/// update requires a reboot to complete." and then asks "Restart now?" on the
+/// next line, and the question alone does not say what wants the restart.
+fn question_text(context: &str, partial: &str) -> String {
+    let question = last_line(partial);
+    let context = context.trim();
+    if context.is_empty() || context == question {
+        return question.to_owned();
+    }
+    format!("{context} {question}")
 }
 
 /// Remove terminal escape sequences.
@@ -451,6 +671,76 @@ mod tests {
     }
 
     #[test]
+    fn recognises_the_hint_a_yes_no_question_ends_with() {
+        assert!(has_yes_no_hint("Restart now? [y|N]: "));
+        assert!(has_yes_no_hint("An update is available. [Y|n]"));
+        assert!(has_yes_no_hint("Do you want to continue? [Y/n] "));
+        assert!(has_yes_no_hint("Proceed (y/n)?"));
+        assert!(has_yes_no_hint("Overwrite the file [yes/no]: "));
+    }
+
+    #[test]
+    fn ordinary_output_does_not_carry_a_yes_no_hint() {
+        assert!(!has_yes_no_hint("Fetching package lists"));
+        assert!(!has_yes_no_hint("Installed 3 packages: y/n-utils"));
+        assert!(!has_yes_no_hint(""));
+    }
+
+    #[test]
+    fn a_translated_question_with_no_hint_is_still_a_question() {
+        // fwupd asks through gettext and prints no `[y/N]`, so the question
+        // mark is all there is to go on. This is what the watchdog waits for.
+        assert!(looks_like_a_question("Jetzt neu starten?"));
+        assert!(looks_like_a_question("Restart now?"));
+        assert!(!looks_like_a_question("Downloading firmware 45%"));
+        assert!(!looks_like_a_question("Fetching:"));
+    }
+
+    #[test]
+    fn a_question_is_shown_with_the_line_that_explains_it() {
+        // On its own "Restart now?" does not say what wants the restart.
+        assert_eq!(
+            question_text("An update requires a reboot to complete.", "Restart now? "),
+            "An update requires a reboot to complete. Restart now?"
+        );
+    }
+
+    #[test]
+    fn a_question_with_nothing_before_it_stands_alone() {
+        assert_eq!(question_text("", "Restart now?"), "Restart now?");
+        assert_eq!(question_text("Restart now?", "Restart now?"), "Restart now?");
+    }
+
+    #[test]
+    fn only_the_last_line_of_a_stalled_read_is_the_question() {
+        // Earlier lines have been read past; matching them would ask the user
+        // about a step that merely printed a question mark.
+        assert_eq!(
+            question_text("", "Checked 4 remotes\nContinue? [y/N]: "),
+            "Continue? [y/N]:"
+        );
+    }
+
+    #[test]
+    fn a_partial_line_is_only_reported_once_until_it_changes() {
+        let mut stall = Stall::default();
+        stall.note("Restart now?", "An update requires a reboot to complete.");
+        let first = stall.generation;
+        stall.reported = true;
+
+        // The same text arriving again is the same question, still answered.
+        stall.note("Restart now?", "An update requires a reboot to complete.");
+        assert_eq!(stall.generation, first);
+        assert!(stall.reported);
+
+        // Being asked again after the line was cleared is a new question.
+        stall.note("", "");
+        stall.note("Restart now?", "An update requires a reboot to complete.");
+        assert_ne!(stall.generation, first);
+        assert!(!stall.reported);
+    }
+
+    #[test]
     fn strips_colour_sequences() {
         assert_eq!(strip_ansi("\u{1b}[32mOK\u{1b}[0m"), "OK");
         assert_eq!(strip_ansi("\u{1b}[1;31mFAILED\u{1b}[0m: nope"), "FAILED: nope");
@@ -508,6 +798,139 @@ mod tests {
     fn an_unrestricted_run_does_not_pass_only() {
         let args = Options::default().to_args();
         assert!(!args.contains(&"--only".to_owned()));
+    }
+
+    /// Run a shell script through the real reader and watchdog over a real
+    /// pseudo-terminal, answering the first question it asks with `answer`.
+    ///
+    /// Nothing short of a real terminal exercises this: the whole problem is a
+    /// question that never becomes a line, and a pipe would change how the
+    /// program behaves in the first place.
+    async fn ask(script: &str, answer: &str) -> (Option<String>, Vec<String>) {
+        let pair = native_pty_system()
+            .openpty(PtySize {
+                rows: PTY_ROWS,
+                cols: PTY_COLS,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .expect("a pseudo-terminal");
+
+        // An absolute path and an explicit directory, because a
+        // `CommandBuilder` starts with no environment: there is no `PATH` to
+        // search and no home directory to fall back to.
+        let mut command = CommandBuilder::new("/bin/sh");
+        command.arg("-c");
+        command.arg(script);
+        command.cwd("/");
+
+        let child = pair.slave.spawn_command(command).expect("sh should start");
+        drop(pair.slave);
+
+        let reader = pair.master.try_clone_reader().expect("a reader");
+        let mut writer = pair.master.take_writer().expect("a writer");
+        let (events, mut receiver) = mpsc::unbounded_channel();
+        let child = Arc::new(Mutex::new(child));
+        let stall = Arc::new(Mutex::new(Stall::default()));
+
+        let reader_events = events.clone();
+        let reader_stall = Arc::clone(&stall);
+        std::thread::spawn(move || read_output(reader, &reader_events, &child, &reader_stall));
+        // Milliseconds rather than the real seconds, so the test does not spend
+        // the whole stall waiting for it.
+        std::thread::spawn(move || {
+            watch_for_stalls(
+                &stall,
+                &events,
+                Duration::from_millis(5),
+                Duration::from_millis(50),
+            )
+        });
+
+        let mut asked = None;
+        let mut output = Vec::new();
+        while let Some(event) = receiver.recv().await {
+            match event {
+                Event::QuestionAsked { prompt } => {
+                    assert!(asked.is_none(), "asked twice: {prompt}");
+                    asked = Some(prompt);
+                    // Answered through the same writer `Handle` writes to.
+                    writeln!(writer, "{answer}").expect("the answer should be written");
+                    writer.flush().expect("the answer should be flushed");
+                }
+                Event::Output(line) => output.push(line),
+                Event::Finished(_) => {}
+                Event::StepStarted(_) | Event::PasswordRequested { .. } => {
+                    panic!("unexpected event")
+                }
+            }
+        }
+
+        (asked, output)
+    }
+
+    /// The case this was all built for: `fwupdmgr` explains itself, asks on the
+    /// next line without a newline after it, prints no `[y/N]` because the
+    /// question went through gettext, and then blocks.
+    #[tokio::test]
+    async fn a_question_with_no_newline_after_it_is_reported_and_can_be_answered() {
+        let (asked, output) = ask(
+            "printf 'An update requires a reboot to complete.\\nRestart now? '; \
+             read answer; printf 'answered %s\\n' \"$answer\"",
+            "n",
+        )
+        .await;
+
+        assert_eq!(
+            asked.as_deref(),
+            Some("An update requires a reboot to complete. Restart now?"),
+            "the question was not reported; output was {output:?}"
+        );
+        assert!(
+            output.iter().any(|line| line.contains("answered n")),
+            "the answer never reached the program; output was {output:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_question_that_announces_itself_is_reported_without_waiting() {
+        let (asked, output) = ask(
+            "printf 'Do you want to continue? [Y/n] '; \
+             read answer; printf 'answered %s\\n' \"$answer\"",
+            "y",
+        )
+        .await;
+
+        assert_eq!(
+            asked.as_deref(),
+            Some("Do you want to continue? [Y/n]"),
+            "the question was not reported; output was {output:?}"
+        );
+        assert!(
+            output.iter().any(|line| line.contains("answered y")),
+            "the answer never reached the program; output was {output:?}"
+        );
+        // Cleared from the buffer to stop it being asked twice, so it has to be
+        // reported as output or the transcript would show a bare "y".
+        assert!(
+            output
+                .iter()
+                .any(|line| line.contains("Do you want to continue?")),
+            "the question is missing from the transcript; output was {output:?}"
+        );
+    }
+
+    /// Output that stops mid-line without asking anything — a step that is
+    /// simply slow — must not be mistaken for a question.
+    #[tokio::test]
+    async fn a_step_that_pauses_mid_line_is_not_treated_as_a_question() {
+        let (asked, output) = ask("printf 'Fetching: '; sleep 1; printf 'done\\n'", "y").await;
+
+        assert_eq!(asked, None, "interrupted a slow step; output was {output:?}");
+        assert!(
+            output.iter().any(|line| line.contains("Fetching: done")),
+            "the step did not finish; output was {output:?}"
+        );
     }
 
     #[test]
@@ -583,7 +1006,9 @@ mod live_tests {
                 }
                 Event::StepStarted(name) => steps.push(name),
                 Event::Finished(finished) => outcome = Some(finished),
-                Event::PasswordRequested { prompt } => panic!("unexpected prompt: {prompt}"),
+                Event::PasswordRequested { prompt } | Event::QuestionAsked { prompt } => {
+                    panic!("unexpected prompt: {prompt}")
+                }
             }
         }
 

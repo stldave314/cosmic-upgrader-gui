@@ -82,6 +82,9 @@ password-body = { $command } heeft beheerdersrechten nodig om door te gaan.
 password-placeholder = Wachtwoord
 authenticate = Aanmelden
 authentication-failed = Dat wachtwoord is niet geaccepteerd.
+question-title = De update wacht op een antwoord
+question-yes = Ja
+question-no = Nee
 
 ## Schedule
 

@@ -82,6 +82,9 @@ password-body = { $command } richiede i permessi di amministratore per continuar
 password-placeholder = Password
 authenticate = Autentica
 authentication-failed = Questa password non è stata accettata.
+question-title = L'aggiornamento è in attesa di una risposta
+question-yes = Sì
+question-no = No
 
 ## Schedule
 

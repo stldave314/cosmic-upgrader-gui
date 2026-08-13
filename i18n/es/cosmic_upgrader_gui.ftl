@@ -82,6 +82,9 @@ password-body = { $command } necesita permisos de administrador para continuar.
 password-placeholder = Contraseña
 authenticate = Autenticar
 authentication-failed = Esa contraseña no se aceptó.
+question-title = La actualización está esperando una respuesta
+question-yes = Sí
+question-no = No
 
 ## Schedule
 

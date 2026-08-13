@@ -84,6 +84,9 @@ password-body = Для продолжения { $command } нужны права
 password-placeholder = Пароль
 authenticate = Войти
 authentication-failed = Этот пароль не принят.
+question-title = Обновление ожидает ответа
+question-yes = Да
+question-no = Нет
 
 ## Schedule
 

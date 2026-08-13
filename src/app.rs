@@ -17,7 +17,8 @@ use tokio::sync::Mutex;
 use crate::autostart;
 use crate::config::{AppTheme, Config, PrivilegeMode};
 use crate::constants::{
-    APP_ID, FALLBACK_SCHEDULER_TICK, ICON_SIZE_ROW, MAX_CONTENT_WIDTH, RUN_LOG_MAX_LINES,
+    ANSWER_NO, ANSWER_YES, APP_ID, FALLBACK_SCHEDULER_TICK, ICON_SIZE_ROW, MAX_CONTENT_WIDTH,
+    RUN_LOG_MAX_LINES,
 };
 use crate::debug::UI;
 use crate::debug_log;
@@ -145,6 +146,11 @@ pub enum DialogPage {
     ConfirmRun,
     /// Something in the run is waiting for a password.
     Password { prompt: String },
+    /// Something in the run is waiting for a yes or no — `fwupdmgr` asking
+    /// whether to restart after a firmware update, most often. The prompt is
+    /// what the terminal showed, because only the program asking knows what it
+    /// is really about to do.
+    Question { prompt: String },
 }
 
 pub struct Flags {
@@ -194,6 +200,8 @@ pub enum Message {
     PasswordInput(String),
     PasswordSubmit,
     TogglePasswordVisible,
+    /// Answer a yes/no question the run stopped on.
+    AnswerQuestion(bool),
 
     /// A topgrade configuration value changed.
     EditSetting(String, String, SettingValue),
@@ -991,6 +999,24 @@ impl Application for App {
                     )
                     .into(),
             ),
+            DialogPage::Question { prompt } => Some(
+                widget::dialog()
+                    .icon(widget::icon::from_name("dialog-question-symbolic").size(64))
+                    .title(fl!("question-title"))
+                    // The question is shown as the program worded it. Restating
+                    // it here would mean guessing what it is about to do, and
+                    // guessing wrong about a restart is expensive.
+                    .body(prompt.clone())
+                    .primary_action(
+                        widget::button::suggested(fl!("question-yes"))
+                            .on_press(Message::AnswerQuestion(true)),
+                    )
+                    .secondary_action(
+                        widget::button::standard(fl!("question-no"))
+                            .on_press(Message::AnswerQuestion(false)),
+                    )
+                    .into(),
+            ),
         }
     }
 
@@ -1252,7 +1278,20 @@ impl Application for App {
                         self.password.clear();
                         self.dialog = Some(DialogPage::Password { prompt });
                     }
+                    runner::Event::QuestionAsked { prompt } => {
+                        self.dialog = Some(DialogPage::Question { prompt });
+                    }
                     runner::Event::Finished(mut outcome) => {
+                        // A run cannot answer anything once it has ended, and a
+                        // prompt left on screen would write into a dead
+                        // terminal.
+                        if matches!(
+                            self.dialog,
+                            Some(DialogPage::Password { .. } | DialogPage::Question { .. })
+                        ) {
+                            self.dialog = None;
+                        }
+
                         // The runner cannot tell a killed child from a failed
                         // one; this side knows which it asked for.
                         outcome.cancelled = run.cancelled;
@@ -1378,6 +1417,19 @@ impl Application for App {
                     let handle = Arc::clone(&run.handle);
                     return cosmic::task::future(async move {
                         handle.lock().await.send_password(&password);
+                        Message::None
+                    });
+                }
+                Task::none()
+            }
+
+            Message::AnswerQuestion(yes) => {
+                self.dialog = None;
+                let answer = if yes { ANSWER_YES } else { ANSWER_NO };
+                if let Some(run) = self.run.as_ref() {
+                    let handle = Arc::clone(&run.handle);
+                    return cosmic::task::future(async move {
+                        handle.lock().await.send_answer(answer);
                         Message::None
                     });
                 }

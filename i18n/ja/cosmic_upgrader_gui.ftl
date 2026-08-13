@@ -81,6 +81,9 @@ password-body = 続行するには { $command } に管理者権限が必要で�
 password-placeholder = パスワード
 authenticate = 認証
 authentication-failed = そのパスワードは受け付けられませんでした。
+question-title = 更新が応答を待っています
+question-yes = はい
+question-no = いいえ
 
 ## Schedule
 

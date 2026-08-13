@@ -32,6 +32,11 @@
   </developer>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.5.3" date="2026-08-13">
+      <description>
+        <p>fix: answer the questions a run stops on, instead of freezing on them</p>
+      </description>
+    </release>
     <release version="0.5.2" date="2026-07-31">
       <description>
         <p>fix: make the per-category settings button findable, and land on the asked-for page</p>

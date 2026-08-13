@@ -150,6 +150,36 @@ pub const RUN_LOG_MAX_LINES: usize = 20_000;
 pub const PASSWORD_PROMPT_MARKERS: [&str; 4] =
     ["password for", "password:", "mot de passe", "passwort"];
 
+/// Hints a program prints when it wants a yes or no answer.
+///
+/// Matched case-insensitively against the end of an unfinished line, after any
+/// trailing punctuation. The wording around them is translated — `fwupdmgr`
+/// asks "Restart now?" through gettext — but the hint itself is a literal in
+/// every one of these programs, so matching it works in any locale.
+pub const YES_NO_HINTS: [&str; 6] = ["[y|n]", "[y/n]", "(y/n)", "[yes/no]", "(yes/no)", "y/n"];
+
+/// What is written back to answer a yes/no question.
+///
+/// A single letter, because that is the common denominator: `fwupdmgr` reads
+/// one character and everything else accepts the short form too.
+pub const ANSWER_YES: &str = "y";
+pub const ANSWER_NO: &str = "n";
+
+/// How long output has to stop, with an unfinished question left on screen,
+/// before the run is taken to be waiting for an answer.
+///
+/// Not every prompt announces itself with a `[y/N]`, and one that does not is
+/// indistinguishable from a line a step is still in the middle of printing —
+/// until the printing stops. Silence is the signal, and it has to be long
+/// enough that a slow step which happens to have paused mid-line is not
+/// mistaken for a question, while short enough that "it froze" is never the
+/// user's first conclusion.
+pub const STALLED_QUESTION_SECONDS: u64 = 10;
+
+/// How often to check whether output has stopped. Also the longest a finished
+/// run waits for the watchdog to notice and stand down.
+pub const STALL_POLL_SECONDS: u64 = 1;
+
 /// The `pkexec` binary, used when the user has chosen that privilege transport.
 pub const PKEXEC: &str = "/usr/bin/pkexec";
 

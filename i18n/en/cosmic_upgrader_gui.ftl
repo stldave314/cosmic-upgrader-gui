@@ -82,6 +82,9 @@ password-body = { $command } needs administrator rights to continue.
 password-placeholder = Password
 authenticate = Authenticate
 authentication-failed = That password was not accepted.
+question-title = The upgrade is waiting for an answer
+question-yes = Yes
+question-no = No
 
 ## Schedule
 

@@ -82,6 +82,9 @@ password-body = { $command } a besoin des droits d'administrateur pour continuer
 password-placeholder = Mot de passe
 authenticate = S'authentifier
 authentication-failed = Ce mot de passe n'a pas été accepté.
+question-title = La mise à jour attend une réponse
+question-yes = Oui
+question-no = Non
 
 ## Schedule
 

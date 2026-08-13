@@ -29,7 +29,7 @@ use cosmic::Application;
 
 use app::{App, Flags};
 use config::{Config, CONFIG_VERSION};
-use constants::{WINDOW_HEIGHT, WINDOW_MIN_HEIGHT, WINDOW_MIN_WIDTH, WINDOW_WIDTH};
+use constants::{ANSWER_NO, WINDOW_HEIGHT, WINDOW_MIN_HEIGHT, WINDOW_MIN_WIDTH, WINDOW_WIDTH};
 
 fn main() -> cosmic::iced::Result {
     // The system's preferred languages, so the UI comes up localized.
@@ -159,6 +159,19 @@ fn run_scheduled(mode: ScheduledMode, config: &Config) -> Result<(), String> {
                 // and log an authentication failure.
                 topgrade::runner::Event::PasswordRequested { prompt } => {
                     eprintln!("a password was requested but nobody is present: {prompt}");
+                }
+                // Declined rather than left unanswered, which would stop the
+                // run for good. "No" is the safe half of every question of this
+                // shape — `fwupdmgr` asking whether to restart is the common
+                // one, and a timer in the middle of the night is the last thing
+                // that should be rebooting the machine.
+                topgrade::runner::Event::QuestionAsked { prompt } => {
+                    let declined = format!("declined, nobody is present to answer: {prompt}");
+                    if let Some(recorder) = recorder.as_mut() {
+                        recorder.write_line(&declined);
+                    }
+                    eprintln!("{declined}");
+                    handle.send_answer(ANSWER_NO);
                 }
                 topgrade::runner::Event::StepStarted(_) => {}
             }

@@ -95,6 +95,9 @@ only what pressing it does.
 - **Live run view** with the current step, streaming output that follows the
   newest line, and a per-step summary when it finishes. Scroll up to read
   something and it stops following; scroll back to the bottom and it resumes.
+- **Answers the questions a run stops on** — a password, or `fwupdmgr` asking
+  whether to restart after a firmware update — instead of freezing on a prompt
+  that never appears.
 - **Scheduled runs** through a systemd user timer, so they happen when the window
   is closed. Automatic installation is opt-in.
 - **Run history**: every run, manual or scheduled, is recorded with its full
@@ -510,6 +513,29 @@ an `[include]` file cannot override it (included files take precedence over the
 file that includes them). It is visible and editable on the configuration page
 like any other setting, and it applies when you run topgrade from a terminal too.
 
+## Questions during a run
+
+A password is not the only thing a step can stop and ask for. `fwupdmgr` finishes
+a firmware update with "An update requires a reboot to complete. Restart now?"
+and waits; other tools ask whether to continue. All of them write the question
+without a newline after it — that is how the cursor ends up on the same line — so
+it never arrives as a complete line of output, and a run that only reported
+complete lines would simply stop, showing nothing and accepting nothing.
+
+Those questions are now shown in a dialog, worded exactly as the program asked
+them and preceded by the line that explains why, with **Yes** and **No** buttons
+that type the answer back. A question ending in a `[y/N]`-style hint is
+recognised straight away. One that does not — `fwupdmgr`'s is translated and
+prints no hint — is indistinguishable from a line a step is still writing, so it
+is caught by the silence after it: an unfinished question that nothing has added
+to for ten seconds is one that is waiting for an answer. A step that merely
+pauses mid-line is left alone.
+
+Nobody is present during a **scheduled** run, so a question there is answered
+**no** and the reason is written into the run's transcript. "No" is the safe half
+of every question of this shape, and a timer in the middle of the night is the
+last thing that should be restarting the machine.
+
 ## Scheduling
 
 Enabling a schedule writes two systemd user units into
@@ -607,8 +633,8 @@ placeholders that were dropped or renamed in translation:
 
 ```
 $ ./install.sh locales
-  de: 124 keys OK
-  en: 124 keys OK
+  de: 285 keys OK
+  en: 285 keys OK
   ...
 ```
 

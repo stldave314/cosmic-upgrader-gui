@@ -81,6 +81,9 @@ password-body = { $command } 需要管理员权限才能继续。
 password-placeholder = 密码
 authenticate = 验证
 authentication-failed = 该密码未被接受。
+question-title = 更新正在等待回答
+question-yes = 是
+question-no = 否
 
 ## Schedule
 
