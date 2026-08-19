@@ -14,10 +14,83 @@
 //! implementation, and a missing notification is not worth failing a completed
 //! upgrade over.
 
+use crate::constants::SCHEDULED_FLAG;
 use crate::debug::UI;
 use crate::debug_log;
 use crate::fl;
 use crate::history::{Outcome, Record};
+
+/// Whether a window of this application is already open.
+///
+/// A scheduled run is a separate process started by systemd, and it has no way
+/// to ask the interface whether anybody is looking. What it can do is notice
+/// that the interface is there at all — and for this application that is the
+/// same question, because it has no windowless mode. `--minimized` is written
+/// into the autostart entry but nothing acts on it: Wayland gives a client no
+/// way to un-minimize itself, so nothing here minimizes. A copy of this running
+/// is a window on screen.
+///
+/// This matters at login. The timer is `Persistent`, so a run missed while the
+/// machine was off starts as the session comes up — exactly when the user is
+/// likely to be opening the window — and announcing a successful check to
+/// somebody already looking at the application is noise.
+///
+/// Other windowless copies do not count: a check and an upgrade can both be due
+/// at once, and neither of those is anybody watching.
+pub fn window_is_open() -> bool {
+    // Truncated to fifteen characters by the kernel, but ours is read the same
+    // way, so both ends are truncated alike and still compare equal.
+    let Ok(ours) = std::fs::read_to_string("/proc/self/comm") else {
+        // Without `/proc` there is no way to tell, and silence is the damaging
+        // guess: a scheduled run nobody hears about is the failure this module
+        // exists to prevent.
+        return false;
+    };
+    let ours = ours.trim().to_owned();
+    let mine = std::process::id().to_string();
+
+    let Ok(entries) = std::fs::read_dir("/proc") else {
+        return false;
+    };
+
+    entries.flatten().any(|entry| {
+        let name = entry.file_name();
+        let Some(pid) = name.to_str() else {
+            return false;
+        };
+        // `/proc` holds more than processes; anything not all-digits is not one.
+        if pid == mine || pid.is_empty() || !pid.bytes().all(|byte| byte.is_ascii_digit()) {
+            return false;
+        }
+
+        let path = entry.path();
+        // A process can exit between listing and reading, which is a missing
+        // file rather than an error worth reporting.
+        let (Ok(comm), Ok(cmdline)) = (
+            std::fs::read_to_string(path.join("comm")),
+            std::fs::read(path.join("cmdline")),
+        ) else {
+            return false;
+        };
+
+        is_open_window(&comm, &ours, &cmdline)
+    })
+}
+
+/// Whether one `/proc` entry is a copy of this application showing a window.
+///
+/// Split out from [`window_is_open`] so the decision can be tested without a
+/// process tree arranged to point it at.
+fn is_open_window(comm: &str, ours: &str, cmdline: &[u8]) -> bool {
+    if comm.trim() != ours {
+        return false;
+    }
+    // Arguments are NUL-separated in `/proc`, and the trailing NUL leaves an
+    // empty final field, which matches nothing.
+    !cmdline
+        .split(|byte| *byte == 0)
+        .any(|arg| arg == SCHEDULED_FLAG.as_bytes())
+}
 
 /// The `notify-send` urgency for a run.
 ///
@@ -95,6 +168,20 @@ pub struct Policy {
     pub on_screen: bool,
 }
 
+/// Whether this outcome is worth saying something about under this policy.
+///
+/// Separate from the posting so the decision can be tested on its own — it is
+/// the part with rules in it, and the part a change is likely to get wrong.
+fn would_notify(record: &Record, policy: Policy) -> bool {
+    match record.outcome {
+        Outcome::Failed => policy.errors,
+        // Nothing to report about a run the user stopped themselves.
+        Outcome::Cancelled => false,
+        // A success the user can already see is not news.
+        Outcome::Succeeded => policy.upgrades && !policy.on_screen,
+    }
+}
+
 /// Post a notification about a finished run, if the user asked to hear about
 /// this kind of outcome.
 ///
@@ -102,13 +189,7 @@ pub struct Policy {
 /// failures off specifically: it is the one outcome worth interrupting somebody
 /// for, and the whole point of an unattended upgrade is not having to check.
 pub fn run_finished(record: &Record, policy: Policy) {
-    let wanted = match record.outcome {
-        Outcome::Failed => policy.errors,
-        // Nothing to report about a run the user stopped themselves.
-        Outcome::Cancelled => false,
-        Outcome::Succeeded => policy.upgrades && !policy.on_screen,
-    };
-    if !wanted {
+    if !would_notify(record, policy) {
         return;
     }
 
@@ -139,7 +220,86 @@ pub fn run_finished(record: &Record, policy: Policy) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::constants::MINIMIZED_FLAG;
     use crate::history::ComponentRecord;
+
+    /// Argument lists are NUL-separated in `/proc`, with a trailing NUL.
+    fn cmdline(args: &[&str]) -> Vec<u8> {
+        let mut out = Vec::new();
+        for arg in args {
+            out.extend_from_slice(arg.as_bytes());
+            out.push(0);
+        }
+        out
+    }
+
+    /// What the kernel puts in `comm`: truncated to fifteen characters, with a
+    /// trailing newline.
+    const COMM: &str = "cosmic-upgrader\n";
+
+    #[test]
+    fn an_open_window_is_somebody_watching() {
+        assert!(is_open_window(
+            COMM,
+            COMM.trim(),
+            &cmdline(&["/usr/bin/cosmic-upgrader-gui"])
+        ));
+    }
+
+    #[test]
+    fn another_scheduled_run_is_not_somebody_watching() {
+        // A check and an upgrade can both come due, and neither has a window.
+        assert!(!is_open_window(
+            COMM,
+            COMM.trim(),
+            &cmdline(&["/usr/bin/cosmic-upgrader-gui", SCHEDULED_FLAG, "--check"])
+        ));
+    }
+
+    #[test]
+    fn an_autostarted_copy_still_counts_as_a_window() {
+        // The autostart entry passes `--minimized`, but nothing acts on it —
+        // Wayland gives a client no way to un-minimize itself — so that copy has
+        // a window like any other, and its user can see the run.
+        assert!(is_open_window(
+            COMM,
+            COMM.trim(),
+            &cmdline(&["/usr/bin/cosmic-upgrader-gui", MINIMIZED_FLAG])
+        ));
+    }
+
+    #[test]
+    fn some_other_program_is_not_this_one() {
+        assert!(!is_open_window(
+            "cosmic-files\n",
+            COMM.trim(),
+            &cmdline(&["/usr/bin/cosmic-files"])
+        ));
+    }
+
+    #[test]
+    fn a_successful_scheduled_run_stays_quiet_when_the_window_is_open() {
+        // The whole point: at login, a missed run finishing while the user is
+        // looking at the application should not announce itself.
+        let watched = Policy {
+            upgrades: true,
+            errors: true,
+            installs: false,
+            on_screen: true,
+        };
+        let unwatched = Policy {
+            on_screen: false,
+            ..watched
+        };
+        let succeeded = record(Outcome::Succeeded, &[]);
+
+        assert!(!would_notify(&succeeded, watched));
+        assert!(would_notify(&succeeded, unwatched));
+        // A failure is still worth interrupting for, either way.
+        let failed = record(Outcome::Failed, &["system"]);
+        assert!(would_notify(&failed, watched));
+        assert!(would_notify(&failed, unwatched));
+    }
 
     fn record(outcome: Outcome, failed: &[&str]) -> Record {
         Record {
@@ -171,12 +331,10 @@ mod tests {
             installs: false,
             on_screen: false,
         };
-        // Nothing is asserted about the side effect; what matters is that the
-        // decision goes the right way.
-        assert!(matches!(
-            (record(Outcome::Failed, &["system"]).outcome, policy.errors),
-            (Outcome::Failed, true)
-        ));
+        assert!(would_notify(&record(Outcome::Failed, &["system"]), policy));
+        assert!(!would_notify(&record(Outcome::Succeeded, &[]), policy));
+        // Not a run the user stopped themselves, whatever else is switched on.
+        assert!(!would_notify(&record(Outcome::Cancelled, &[]), policy));
     }
 
     #[test]

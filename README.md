@@ -341,6 +341,21 @@ upgrade is the one outcome worth interrupting somebody for — the whole point o
 scheduling it is not having to check — so turning those off is a separate,
 deliberate switch.
 
+A scheduled run that finishes while the window is open says nothing about having
+succeeded. This is not a hypothetical: the timer is `Persistent`, so a run missed
+while the machine was off starts as the session comes up — which is exactly when
+you are likely to be opening the application — and announcing a successful check
+to somebody already looking at it is noise. A run started from the window has
+always behaved this way; a scheduled one now behaves the same when there is
+somebody there to see it. Failures still interrupt either way.
+
+"There to see it" means a window exists, not that it has focus: a separate
+process cannot ask the compositor which window is on top, and Wayland offers it
+no way to find out. It is a fair proxy here because this application has no
+windowless mode — `--minimized` is written into the autostart entry but nothing
+acts on it, since a Wayland client cannot un-minimize itself — so a copy of it
+running is a window on screen.
+
 topgrade posts its own end-of-run notification, and its default is to post one
 every time. Every invocation that runs steps is given `--notify-end never`.
 

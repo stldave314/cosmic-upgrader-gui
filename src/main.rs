@@ -29,7 +29,9 @@ use cosmic::Application;
 
 use app::{App, Flags};
 use config::{Config, CONFIG_VERSION};
-use constants::{ANSWER_NO, WINDOW_HEIGHT, WINDOW_MIN_HEIGHT, WINDOW_MIN_WIDTH, WINDOW_WIDTH};
+use constants::{
+    ANSWER_NO, SCHEDULED_FLAG, WINDOW_HEIGHT, WINDOW_MIN_HEIGHT, WINDOW_MIN_WIDTH, WINDOW_WIDTH,
+};
 
 fn main() -> cosmic::iced::Result {
     // The system's preferred languages, so the UI comes up localized.
@@ -108,7 +110,7 @@ enum ScheduledMode {
 /// interface for anyone else.
 fn scheduled_mode() -> Option<ScheduledMode> {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    if !args.iter().any(|arg| arg == "--scheduled") {
+    if !args.iter().any(|arg| arg == SCHEDULED_FLAG) {
         return None;
     }
     Some(if args.iter().any(|arg| arg == "--upgrade") {
@@ -188,17 +190,21 @@ fn run_scheduled(mode: ScheduledMode, config: &Config) -> Result<(), String> {
 
         if let Some(recorder) = recorder {
             if let Some(record) = recorder.finish(&components, false, unix_now()) {
-                // Nobody watched this run, so it reports either way rather than
-                // only on failure — that is the whole point of a scheduled one.
+                // A scheduled run usually happens with nobody watching, so it
+                // reports either way rather than only on failure — that is the
+                // whole point of one. Usually, but not always: the timer is
+                // `Persistent`, so a run missed while the machine was off starts
+                // as the session comes up, which is exactly when the window is
+                // likely to be open. Telling somebody looking at the application
+                // that a check succeeded is noise, so that case reports like a
+                // run started from the window: failures only.
                 notify::run_finished(
                     &record,
                     notify::Policy {
                         upgrades: config.notify_upgrades,
                         errors: config.notify_errors,
                         installs: mode == ScheduledMode::Upgrade,
-                        // Nobody watched this run, so a success is worth
-                        // reporting rather than only a failure.
-                        on_screen: false,
+                        on_screen: notify::window_is_open(),
                     },
                 );
                 history::prune(config.keep_run_logs);
