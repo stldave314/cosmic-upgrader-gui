@@ -59,7 +59,8 @@ use tokio::task::JoinSet;
 use super::discover::StepId;
 use super::Topgrade;
 use crate::constants::{
-    probe_concurrency, PROBE_TIMEOUT, STATUS_FAILED, STATUS_OK, STATUS_SKIPPED, SUMMARY_HEADING,
+    probe_concurrency, NOTIFY_END, PROBE_TIMEOUT, STATUS_FAILED, STATUS_OK, STATUS_SKIPPED,
+    SUMMARY_HEADING,
 };
 use crate::debug::PROBE;
 use crate::debug_log;
@@ -231,6 +232,20 @@ pub async fn scan(
     capabilities
 }
 
+/// What one probe runs.
+///
+/// Split out from [`probe_step`] so the arguments can be asserted on without
+/// starting a process — in particular that topgrade is told not to announce
+/// itself, which is not visible in the probe's output and so would otherwise go
+/// unnoticed until a desktop filled up with notifications.
+fn probe_args(id: &StepId) -> Vec<&str> {
+    let mut args = vec!["--dry-run", "--show-skipped"];
+    // A scan runs this once per step, and topgrade notifies by default.
+    args.extend(NOTIFY_END);
+    args.extend(["--only", id.as_str()]);
+    args
+}
+
 /// Probe one step.
 ///
 /// A step that cannot be probed at all — the process failed to start, or hung
@@ -239,9 +254,7 @@ pub async fn scan(
 /// would be worse than showing it as having nothing to do, and the interface
 /// offers a rescan.
 async fn probe_step(topgrade: &Topgrade, id: &StepId) -> StepReport {
-    let args = ["--dry-run", "--show-skipped", "--only", id.as_str()];
-
-    let output = match tokio::time::timeout(PROBE_TIMEOUT, topgrade.output(&args)).await {
+    let output = match tokio::time::timeout(PROBE_TIMEOUT, topgrade.output(&probe_args(id))).await {
         Ok(Ok(output)) => output,
         Ok(Err(error)) => {
             debug_log!(PROBE, "{id}: probe failed: {error}");
@@ -388,6 +401,30 @@ fn deprecation_note(body: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_probe_does_not_let_topgrade_announce_itself() {
+        // topgrade notifies at the end of a run by default, and a scan runs it
+        // once per step — so without this, opening the window posted a
+        // "Topgrade finished successfully" for every step on the machine.
+        let id = StepId::new("cargo");
+        let args = probe_args(&id);
+        let at = args
+            .iter()
+            .position(|arg| *arg == NOTIFY_END[0])
+            .expect("--notify-end");
+        assert_eq!(args.get(at + 1), Some(&NOTIFY_END[1]));
+    }
+
+    #[test]
+    fn a_probe_is_restricted_to_its_own_step_and_changes_nothing() {
+        let id = StepId::new("flatpak");
+        let args = probe_args(&id);
+        assert!(args.contains(&"--dry-run"), "{args:?}");
+        assert!(args.contains(&"--show-skipped"), "{args:?}");
+        let at = args.iter().position(|arg| *arg == "--only").expect("--only");
+        assert_eq!(args.get(at + 1), Some(&"flatpak"));
+    }
 
     /// Captured from `topgrade -n --show-skipped --only cargo` on 17.9.0.
     const CARGO: &str = "―― 17:11:57 - Cargo ――\n\
