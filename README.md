@@ -341,9 +341,14 @@ upgrade is the one outcome worth interrupting somebody for — the whole point o
 scheduling it is not having to check — so turning those off is a separate,
 deliberate switch.
 
-topgrade posts its own end-of-run notification. This turns it off with
-`--notify-end never`, because the one here knows more: whether the run was
-scheduled, and which steps failed rather than only that something did.
+topgrade posts its own end-of-run notification, and its default is to post one
+every time. Every invocation that runs steps is given `--notify-end never`.
+
+For a real run that is because the notification here knows more: whether the run
+was scheduled, and which steps failed rather than only that something did. For a
+capability scan it is because there is nothing to announce at all — a scan runs
+topgrade once per step, so leaving it on meant a "Topgrade finished successfully"
+for every step on the machine, every time the window opened.
 
 ## Installing without anybody there
 

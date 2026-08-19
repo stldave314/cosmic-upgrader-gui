@@ -128,6 +128,19 @@ pub const STATUS_FAILED: &str = "FAILED";
 
 // ── Running an upgrade ──────────────────────────────────────────────────────
 
+/// Turns off the notification topgrade posts for itself when a run ends.
+///
+/// Belongs on every invocation that runs steps, which is a real upgrade and each
+/// capability probe alike — topgrade's default is `always`, so anything left off
+/// this announces itself.
+///
+/// For a run, the notification this application posts knows more: whether the
+/// run was scheduled, and which steps failed rather than only that something
+/// did. For a probe there is nothing to announce at all, and a startup scan runs
+/// topgrade once per step — leaving it on means a "Topgrade finished
+/// successfully" for every step on the machine, every time the window opens.
+pub const NOTIFY_END: [&str; 2] = ["--notify-end", "never"];
+
 /// Terminal size reported to the pseudo-terminal topgrade runs under.
 ///
 /// Wide enough that the tools it drives don't wrap their progress bars into

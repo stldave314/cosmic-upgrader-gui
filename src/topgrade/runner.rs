@@ -78,8 +78,8 @@ use super::discover::StepId;
 use super::probe::{parse_summary_line, Component, Status};
 use super::Topgrade;
 use crate::constants::{
-    PASSWORD_PROMPT_MARKERS, PROGRESS_REDRAW_MS, PTY_COLS, PTY_ROWS, STALLED_QUESTION_SECONDS,
-    STALL_POLL_SECONDS, SUMMARY_HEADING, YES_NO_HINTS,
+    NOTIFY_END, PASSWORD_PROMPT_MARKERS, PROGRESS_REDRAW_MS, PTY_COLS, PTY_ROWS,
+    STALLED_QUESTION_SECONDS, STALL_POLL_SECONDS, SUMMARY_HEADING, YES_NO_HINTS,
 };
 use crate::debug::RUN;
 use crate::debug_log;
@@ -120,8 +120,7 @@ impl Options {
         // posts a better one — it knows whether the run was scheduled, and names
         // the steps that failed rather than only that something did — so two
         // would be one too many.
-        args.push("--notify-end".to_owned());
-        args.push("never".to_owned());
+        args.extend(NOTIFY_END.iter().map(|arg| (*arg).to_owned()));
 
         if !self.only.is_empty() {
             args.push("--only".to_owned());
@@ -822,8 +821,11 @@ mod tests {
     fn topgrades_own_end_of_run_notification_is_turned_off() {
         // This application posts its own, which knows more.
         let args = Options::default().to_args();
-        let at = args.iter().position(|a| a == "--notify-end").expect("--notify-end");
-        assert_eq!(args.get(at + 1).map(String::as_str), Some("never"));
+        let at = args
+            .iter()
+            .position(|a| a == NOTIFY_END[0])
+            .expect("--notify-end");
+        assert_eq!(args.get(at + 1).map(String::as_str), Some(NOTIFY_END[1]));
     }
 
     #[test]
