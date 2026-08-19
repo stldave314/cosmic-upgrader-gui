@@ -173,6 +173,10 @@ fn run_scheduled(mode: ScheduledMode, config: &Config) -> Result<(), String> {
                     eprintln!("{declined}");
                     handle.send_answer(ANSWER_NO);
                 }
+                // Nobody is watching a scheduled run as it goes, and a progress
+                // bar's intermediate states are of no interest afterwards. The
+                // finished line is recorded like any other.
+                topgrade::runner::Event::Progress(_) => {}
                 topgrade::runner::Event::StepStarted(_) => {}
             }
         }

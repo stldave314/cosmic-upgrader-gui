@@ -93,7 +93,8 @@ only what pressing it does.
 - **Preview mode** that runs topgrade dry, so you can see exactly what would
   happen before committing to it.
 - **Live run view** with the current step, streaming output that follows the
-  newest line, and a per-step summary when it finishes. Scroll up to read
+  newest line, progress bars that update as they go rather than appearing once
+  they are over, and a per-step summary when it finishes. Scroll up to read
   something and it stops following; scroll back to the bottom and it resumes.
 - **Answers the questions a run stops on** — a password, or `fwupdmgr` asking
   whether to restart after a firmware update — instead of freezing on a prompt
@@ -535,6 +536,27 @@ Nobody is present during a **scheduled** run, so a question there is answered
 **no** and the reason is written into the run's transcript. "No" is the safe half
 of every question of this shape, and a timer in the middle of the night is the
 last thing that should be restarting the machine.
+
+## Progress bars
+
+Progress bars live on that same unfinished line. One redraws itself by returning
+to the start of the line and writing over what is there, and only ends the line
+once the work is done — so reporting complete lines alone showed a download at
+the moment it finished, with nothing in between, which is the opposite of what a
+progress bar is for.
+
+The line is now shown as it changes, below the log and replaced in place, so the
+line count does not move and the log does not scroll while a bar ticks along.
+Updates are rate-limited to ten a second: a bar can redraw sixty times a second,
+and every one that reached the window would cost a repaint. Overwritten frames
+are dropped as they arrive, so a long download no longer grows the buffer to the
+size of everything it ever printed, and only the finished line is kept in the
+transcript.
+
+A bar that redraws several lines at once by moving the cursor up — `docker pull`
+tracking one layer per line — cannot be reproduced faithfully in a plain text
+log, and appears as repeated blocks rather than a single updating one. Showing it
+properly would mean being a terminal emulator.
 
 ## Scheduling
 

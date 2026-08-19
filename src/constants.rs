@@ -180,6 +180,14 @@ pub const STALLED_QUESTION_SECONDS: u64 = 10;
 /// run waits for the watchdog to notice and stand down.
 pub const STALL_POLL_SECONDS: u64 = 1;
 
+/// How often the line still being written is sent to the interface, in
+/// milliseconds.
+///
+/// A progress bar redraws itself many times a second, and each redraw that
+/// reaches the interface costs a repaint of the whole window. Ten a second
+/// reads as smooth without spending the run's time on drawing.
+pub const PROGRESS_REDRAW_MS: u64 = 100;
+
 /// The `pkexec` binary, used when the user has chosen that privilege transport.
 pub const PKEXEC: &str = "/usr/bin/pkexec";
 

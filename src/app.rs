@@ -392,6 +392,13 @@ struct Ready {
 struct Run {
     handle: Arc<Mutex<runner::Handle>>,
     log: VecDeque<String>,
+    /// The line still being written, shown below the log and replaced as it
+    /// changes — a progress bar redrawing itself, most often.
+    ///
+    /// Kept apart from `log` rather than appended to it because it is not a line
+    /// yet: it is rewritten many times before it becomes one, and it belongs in
+    /// the transcript only once it has settled.
+    progress: Option<String>,
     current_step: Option<String>,
     outcome: Option<runner::Outcome>,
     cancelled: bool,
@@ -1226,6 +1233,7 @@ impl Application for App {
                         self.run = Some(Run {
                             handle: Arc::clone(&handle),
                             log: VecDeque::new(),
+                            progress: None,
                             current_step: None,
                             outcome: None,
                             cancelled: false,
@@ -1262,7 +1270,12 @@ impl Application for App {
 
                 match *event {
                     runner::Event::StepStarted(name) => run.current_step = Some(name),
+                    // The line still being written. Not recorded and not added
+                    // to the log: it is not a line yet, and it is replaced by
+                    // the finished one as soon as that arrives.
+                    runner::Event::Progress(line) => run.progress = Some(line),
                     runner::Event::Output(line) => {
+                        run.progress = None;
                         if let Some(recorder) = run.recorder.as_mut() {
                             recorder.write_line(&line);
                         }
@@ -1274,14 +1287,21 @@ impl Application for App {
                             run.log.pop_front();
                         }
                     }
+                    // A prompt is taken out of the buffer when it is recognised,
+                    // so what is on screen as the line being written is now
+                    // stale and belongs in the dialog instead.
                     runner::Event::PasswordRequested { prompt } => {
+                        run.progress = None;
                         self.password.clear();
                         self.dialog = Some(DialogPage::Password { prompt });
                     }
                     runner::Event::QuestionAsked { prompt } => {
+                        run.progress = None;
                         self.dialog = Some(DialogPage::Question { prompt });
                     }
                     runner::Event::Finished(mut outcome) => {
+                        run.progress = None;
+
                         // A run cannot answer anything once it has ended, and a
                         // prompt left on screen would write into a dead
                         // terminal.
@@ -2890,6 +2910,14 @@ impl App {
             .fold(widget::column::with_children(Vec::new()).spacing(2), |column, line| {
                 column.push(widget::text::monotext(line.clone()))
             });
+
+        // The line still being written goes last, where the terminal would have
+        // it. It is replaced in place as it changes, so the line count does not
+        // move and the log does not scroll while a progress bar ticks along.
+        let log = match &run.progress {
+            Some(line) => log.push(widget::text::monotext(line.clone())),
+            None => log,
+        };
 
         column
             .push(
