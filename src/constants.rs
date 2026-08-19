@@ -216,6 +216,13 @@ pub const AUTOSTART_DIR: &str = "autostart";
 /// autostart file and read back by the same binary.
 pub const MINIMIZED_FLAG: &str = "--minimized";
 
+/// Marks a run with no window: the systemd unit starts this same binary with it.
+///
+/// Written into the unit file and read back off the command line, so the two
+/// have to agree — and it is also how a scheduled run recognises *other*
+/// windowless copies of itself when working out whether anybody is watching.
+pub const SCHEDULED_FLAG: &str = "--scheduled";
+
 // ── Run history ─────────────────────────────────────────────────────────────
 
 /// Directory, relative to the user's data directory, holding run records.

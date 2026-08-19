@@ -32,6 +32,11 @@
   </developer>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="0.5.6" date="2026-08-19">
+      <description>
+        <p>fix: keep a scheduled run quiet about success when the window is open</p>
+      </description>
+    </release>
     <release version="0.5.5" date="2026-08-19">
       <description>
         <p>fix: stop the capability scan announcing itself once per step</p>

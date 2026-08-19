@@ -211,6 +211,9 @@ fn timer_path() -> Result<PathBuf> {
 /// The service unit, which runs this binary in its scheduled mode.
 fn service_unit(executable: &str, automatic: bool) -> String {
     let mode = if automatic { "--upgrade" } else { "--check" };
+    // Shared with the parser that reads it back, so the unit cannot come to
+    // say something the binary does not recognise.
+    let flag = crate::constants::SCHEDULED_FLAG;
     format!(
         "# Written by cosmic-upgrader-gui. Changes here are replaced when the\n\
          # schedule is next applied from the application.\n\
@@ -220,7 +223,7 @@ fn service_unit(executable: &str, automatic: bool) -> String {
          \n\
          [Service]\n\
          Type=oneshot\n\
-         ExecStart={executable} --scheduled {mode}\n\
+         ExecStart={executable} {flag} {mode}\n\
          # A long upgrade should not be killed halfway through a package\n\
          # transaction, so no timeout is imposed.\n\
          TimeoutStartSec=infinity\n",
