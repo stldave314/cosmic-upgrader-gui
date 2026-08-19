@@ -34,6 +34,17 @@
 //! Either way it becomes a [`Event::QuestionAsked`], the interface asks the
 //! user, and [`Handle::send_answer`] types the reply back.
 //!
+//! ## Progress bars
+//!
+//! The same unfinished line is where progress bars live. One redraws itself by
+//! returning to the start of the line with a carriage return and writing over
+//! what is there, and only ends the line when the work is done — so reporting
+//! complete lines alone means a download appears at the moment it finishes,
+//! with nothing in between. That line is reported as it changes, as
+//! [`Event::Progress`], rate-limited to something the eye reads as smooth; the
+//! overwritten frames are dropped as they go, which also stops a long download
+//! growing the buffer to the size of everything it ever printed.
+//!
 //! ## Privileges
 //!
 //! The `system` step runs the distribution's package manager under `sudo`,
@@ -67,8 +78,8 @@ use super::discover::StepId;
 use super::probe::{parse_summary_line, Component, Status};
 use super::Topgrade;
 use crate::constants::{
-    PASSWORD_PROMPT_MARKERS, PTY_COLS, PTY_ROWS, STALLED_QUESTION_SECONDS, STALL_POLL_SECONDS,
-    SUMMARY_HEADING, YES_NO_HINTS,
+    PASSWORD_PROMPT_MARKERS, PROGRESS_REDRAW_MS, PTY_COLS, PTY_ROWS, STALLED_QUESTION_SECONDS,
+    STALL_POLL_SECONDS, SUMMARY_HEADING, YES_NO_HINTS,
 };
 use crate::debug::RUN;
 use crate::debug_log;
@@ -129,6 +140,13 @@ pub enum Event {
     StepStarted(String),
     /// One line of output, with terminal escapes removed.
     Output(String),
+    /// The line still being written, with terminal escapes removed.
+    ///
+    /// A progress bar redraws itself in place and only ends the line once it is
+    /// finished, so waiting for the newline means showing the download after it
+    /// has already happened. This is that line as it currently stands; the next
+    /// one replaces it, and an [`Output`](Event::Output) finishes it.
+    Progress(String),
     /// Something is asking for a password, and the run is stopped until one is
     /// sent back through [`Handle::send_password`].
     PasswordRequested { prompt: String },
@@ -367,6 +385,11 @@ fn read_output(
     // The last complete line that said anything, kept because a question on the
     // line after it is rarely self-explanatory.
     let mut context = String::new();
+    // The unfinished line last sent to the interface, and when, so a progress
+    // bar redrawing itself sixty times a second does not repaint the window
+    // sixty times a second.
+    let redraw = Duration::from_millis(PROGRESS_REDRAW_MS);
+    let mut shown: Option<(String, Instant)> = None;
 
     loop {
         let read = match reader.read(&mut buffer) {
@@ -404,11 +427,31 @@ fn read_output(
             let _ = events.send(Event::Output(line));
         }
 
-        // A prompt is written without a trailing newline — that is how it
-        // leaves the cursor after the question — so it never becomes a complete
-        // line and would be missed entirely by the loop above.
-        if !pending.is_empty() {
-            let partial = strip_ansi(&pending);
+        // A progress bar redraws by returning to the start of the line with a
+        // carriage return and writing over what is there, so everything before
+        // the last one has already been overwritten on screen. Dropping it keeps
+        // the buffer the size of one frame instead of the size of the whole
+        // download, and leaves the frame that is actually showing.
+        //
+        // A trailing carriage return is kept rather than trimmed away, because
+        // the newline that pairs with it may not have been read yet — a read can
+        // land between the two — and dropping it would lose a whole line.
+        let frame_start = {
+            let frame = pending.trim_end_matches('\r');
+            frame.rfind('\r').map(|at| at + 1)
+        };
+        if let Some(start) = frame_start {
+            pending.drain(..start);
+        }
+
+        // Whatever has been written since the last newline. A prompt is written
+        // without one — that is how it leaves the cursor after the question —
+        // and so is a progress bar between redraws, so neither ever becomes a
+        // complete line and both would be missed entirely by the loop above.
+        let partial = strip_ansi(pending.trim_end_matches('\r'));
+        let mut unfinished = partial.as_str();
+
+        if !partial.is_empty() {
             if is_password_prompt(&partial) {
                 debug_log!(RUN, "password prompt: {partial:?}");
                 let _ = events.send(Event::PasswordRequested {
@@ -417,6 +460,7 @@ fn read_output(
                 // Cleared so the same prompt is not reported again on the next
                 // read; the reply arrives through the writer, not through here.
                 pending.clear();
+                unfinished = "";
             } else if has_yes_no_hint(&partial) {
                 // A `[y/N]` is unmistakable, so this one needs no waiting.
                 let prompt = question_text(&context, &partial);
@@ -430,11 +474,24 @@ fn read_output(
                 let _ = events.send(Event::Output(last_line(&partial).to_owned()));
                 let _ = events.send(Event::QuestionAsked { prompt });
                 pending.clear();
+                unfinished = "";
+            } else {
+                // Shown while it is still being written, rather than held back
+                // until a newline finally arrives — which for a progress bar is
+                // when the download it was reporting on has already finished.
+                let due = match &shown {
+                    Some((text, at)) => text != &partial && at.elapsed() >= redraw,
+                    None => true,
+                };
+                if due {
+                    let _ = events.send(Event::Progress(partial.clone()));
+                    shown = Some((partial.clone(), Instant::now()));
+                }
             }
         }
 
         if let Ok(mut stall) = stall.lock() {
-            stall.note(&strip_ansi(&pending), &context);
+            stall.note(unfinished, &context);
         }
 
         let _ = in_summary;
@@ -806,7 +863,15 @@ mod tests {
     /// Nothing short of a real terminal exercises this: the whole problem is a
     /// question that never becomes a line, and a pipe would change how the
     /// program behaves in the first place.
-    async fn ask(script: &str, answer: &str) -> (Option<String>, Vec<String>) {
+    /// What a scripted run reported: the question it asked, its complete lines,
+    /// and every state of the line that was still being written.
+    struct Reported {
+        asked: Option<String>,
+        output: Vec<String>,
+        progress: Vec<String>,
+    }
+
+    async fn ask(script: &str, answer: &str) -> Reported {
         let pair = native_pty_system()
             .openpty(PtySize {
                 rows: PTY_ROWS,
@@ -849,6 +914,7 @@ mod tests {
 
         let mut asked = None;
         let mut output = Vec::new();
+        let mut progress = Vec::new();
         while let Some(event) = receiver.recv().await {
             match event {
                 Event::QuestionAsked { prompt } => {
@@ -859,6 +925,7 @@ mod tests {
                     writer.flush().expect("the answer should be flushed");
                 }
                 Event::Output(line) => output.push(line),
+                Event::Progress(line) => progress.push(line),
                 Event::Finished(_) => {}
                 Event::StepStarted(_) | Event::PasswordRequested { .. } => {
                     panic!("unexpected event")
@@ -866,7 +933,11 @@ mod tests {
             }
         }
 
-        (asked, output)
+        Reported {
+            asked,
+            output,
+            progress,
+        }
     }
 
     /// The case this was all built for: `fwupdmgr` explains itself, asks on the
@@ -874,7 +945,7 @@ mod tests {
     /// question went through gettext, and then blocks.
     #[tokio::test]
     async fn a_question_with_no_newline_after_it_is_reported_and_can_be_answered() {
-        let (asked, output) = ask(
+        let run = ask(
             "printf 'An update requires a reboot to complete.\\nRestart now? '; \
              read answer; printf 'answered %s\\n' \"$answer\"",
             "n",
@@ -882,19 +953,21 @@ mod tests {
         .await;
 
         assert_eq!(
-            asked.as_deref(),
+            run.asked.as_deref(),
             Some("An update requires a reboot to complete. Restart now?"),
-            "the question was not reported; output was {output:?}"
+            "the question was not reported; output was {:?}",
+            run.output
         );
         assert!(
-            output.iter().any(|line| line.contains("answered n")),
-            "the answer never reached the program; output was {output:?}"
+            run.output.iter().any(|line| line.contains("answered n")),
+            "the answer never reached the program; output was {:?}",
+            run.output
         );
     }
 
     #[tokio::test]
     async fn a_question_that_announces_itself_is_reported_without_waiting() {
-        let (asked, output) = ask(
+        let run = ask(
             "printf 'Do you want to continue? [Y/n] '; \
              read answer; printf 'answered %s\\n' \"$answer\"",
             "y",
@@ -902,21 +975,24 @@ mod tests {
         .await;
 
         assert_eq!(
-            asked.as_deref(),
+            run.asked.as_deref(),
             Some("Do you want to continue? [Y/n]"),
-            "the question was not reported; output was {output:?}"
+            "the question was not reported; output was {:?}",
+            run.output
         );
         assert!(
-            output.iter().any(|line| line.contains("answered y")),
-            "the answer never reached the program; output was {output:?}"
+            run.output.iter().any(|line| line.contains("answered y")),
+            "the answer never reached the program; output was {:?}",
+            run.output
         );
         // Cleared from the buffer to stop it being asked twice, so it has to be
         // reported as output or the transcript would show a bare "y".
         assert!(
-            output
+            run.output
                 .iter()
                 .any(|line| line.contains("Do you want to continue?")),
-            "the question is missing from the transcript; output was {output:?}"
+            "the question is missing from the transcript; output was {:?}",
+            run.output
         );
     }
 
@@ -924,12 +1000,80 @@ mod tests {
     /// simply slow — must not be mistaken for a question.
     #[tokio::test]
     async fn a_step_that_pauses_mid_line_is_not_treated_as_a_question() {
-        let (asked, output) = ask("printf 'Fetching: '; sleep 1; printf 'done\\n'", "y").await;
+        let run = ask("printf 'Fetching: '; sleep 1; printf 'done\\n'", "y").await;
 
-        assert_eq!(asked, None, "interrupted a slow step; output was {output:?}");
+        assert_eq!(
+            run.asked, None,
+            "interrupted a slow step; output was {:?}",
+            run.output
+        );
         assert!(
-            output.iter().any(|line| line.contains("Fetching: done")),
-            "the step did not finish; output was {output:?}"
+            run.output.iter().any(|line| line.contains("Fetching: done")),
+            "the step did not finish; output was {:?}",
+            run.output
+        );
+    }
+
+    /// A progress bar redrawing itself in place must be visible as it goes, not
+    /// only once the download it is reporting on has finished.
+    #[tokio::test]
+    async fn a_progress_bar_is_reported_while_it_is_still_redrawing() {
+        // The sleeps are longer than the redraw interval, so each frame is a
+        // separate update rather than one the rate limit folds into the next.
+        let run = ask(
+            "printf 'Downloading  10%%\\r'; sleep 0.2; \
+             printf 'Downloading  55%%\\r'; sleep 0.2; \
+             printf 'Downloading 100%%\\n'",
+            "",
+        )
+        .await;
+
+        assert!(
+            run.progress.iter().any(|frame| frame.contains("10%")),
+            "the first frame was never shown; progress was {:?}",
+            run.progress
+        );
+        assert!(
+            run.progress.iter().any(|frame| frame.contains("55%")),
+            "the middle frame was never shown; progress was {:?}",
+            run.progress
+        );
+        // The finished line arrives as output, and only the last frame of it —
+        // the earlier ones were overwritten on screen.
+        assert!(
+            run.output
+                .iter()
+                .any(|line| line.trim() == "Downloading 100%"),
+            "the finished line is wrong; output was {:?}",
+            run.output
+        );
+        assert!(
+            !run.output.iter().any(|line| line.contains("10%")),
+            "an overwritten frame was kept as a line; output was {:?}",
+            run.output
+        );
+    }
+
+    /// A read landing between the `\r` and the `\n` of a line ending must not
+    /// lose the line — which is what dropping a trailing carriage return would
+    /// do, since the pseudo-terminal ends every line with both.
+    #[tokio::test]
+    async fn a_line_ending_split_across_two_reads_survives() {
+        let run = ask(
+            "printf 'first line\\r'; sleep 0.2; printf '\\nsecond line\\n'",
+            "",
+        )
+        .await;
+
+        assert!(
+            run.output.iter().any(|line| line.trim() == "first line"),
+            "the split line was lost; output was {:?}",
+            run.output
+        );
+        assert!(
+            run.output.iter().any(|line| line.trim() == "second line"),
+            "the following line was lost; output was {:?}",
+            run.output
         );
     }
 
@@ -1004,6 +1148,7 @@ mod live_tests {
                     lines += 1;
                     println!("out: {line}");
                 }
+                Event::Progress(line) => println!("progress: {line}"),
                 Event::StepStarted(name) => steps.push(name),
                 Event::Finished(finished) => outcome = Some(finished),
                 Event::PasswordRequested { prompt } | Event::QuestionAsked { prompt } => {
